@@ -1,130 +1,175 @@
+"""Optional Streamlit interface for The Grounded Answer.
+
+The UI uses the same source-first pipeline and validated PolicyAnswer contract as
+the CLI.  Deterministic generation and stable hashing embeddings are the safe
+defaults; external model use must be selected explicitly.
 """
-Streamlit Web UI for The Grounded Answer.
-Provides an interactive front-end to query the Calder County HSP policy manual.
-"""
+
+from __future__ import annotations
+
+import logging
+import time
+from typing import Any
 
 import streamlit as st
-import time
 
-from main import _load_components, _ask_question
+from config.settings import Settings
+from src.pipeline import GroundedAnswerPipeline
 
-# Must be the first Streamlit command
+
+LOGGER = logging.getLogger("grounded_answer.streamlit")
+
 st.set_page_config(
     page_title="The Grounded Answer",
     page_icon="⚖️",
     layout="centered",
 )
 
+
+def _citation_label(citation: dict[str, Any]) -> str:
+    clause_id = citation.get("clause_id")
+    source_id = citation.get("chunk_id", "source")
+    section = citation.get("section_title") or "Untitled section"
+    return f"§{clause_id} — {section}" if clause_id else f"{source_id} — {section}"
+
+
+def _render_answer(payload: dict[str, Any]) -> None:
+    """Render one validated PolicyAnswer serialized in JSON mode."""
+
+    decision = str(payload.get("decision", "REFUSE")).upper()
+    if decision == "ANSWER":
+        st.success("ANSWER — directly supported by the manual")
+    elif decision == "CONFLICT":
+        st.warning("CONFLICT — the manual contains incompatible guidance")
+    else:
+        st.error("REFUSE — the manual does not safely settle the question")
+
+    st.markdown(str(payload.get("answer", "No answer was produced.")))
+
+    reason = payload.get("reason")
+    if reason:
+        with st.expander("Why this decision was made"):
+            st.write(reason)
+
+    next_step = payload.get("next_step")
+    if next_step:
+        st.info(f"Next step: {next_step}")
+
+    citations = payload.get("citations") or []
+    if citations:
+        with st.expander("Verify cited source text", expanded=decision == "CONFLICT"):
+            for citation in citations:
+                start = citation.get("line_start", "?")
+                end = citation.get("line_end", "?")
+                page = citation.get("page")
+                location = f"lines {start}–{end}"
+                if page is not None:
+                    location = f"page {page}; {location}"
+                st.markdown(
+                    f"**{_citation_label(citation)}**  \n"
+                    f"{location} · Source ID `{citation.get('chunk_id', 'unknown')}`"
+                )
+                st.code(str(citation.get("excerpt", "")), language=None, wrap_lines=True)
+
+    evidence = payload.get("evidence_level")
+    if evidence:
+        st.caption(f"Evidence level: {evidence}")
+
+
+@st.cache_resource(show_spinner="Loading the policy index…")
+def _load_pipeline(embedding_backend: str, provider: str) -> GroundedAnswerPipeline:
+    settings = Settings.from_env(
+        embedding_backend=embedding_backend,
+        llm_provider=provider,
+    )
+    return GroundedAnswerPipeline.load(settings)
+
+
 st.title("⚖️ The Grounded Answer")
-st.subheader("Calder County HSP Policy Assistant")
+st.subheader("Calder County HSP policy evidence assistant")
+st.markdown(
+    "This assistant uses only the supplied policy manual. It chooses **ANSWER**, "
+    "**CONFLICT**, or **REFUSE**, and exposes the exact source text behind every "
+    "supported answer. It is decision support, not an eligibility decision-maker."
+)
 
-st.markdown("""
-This assistant answers questions using **only** the official Calder County Household Support Program policy manual. 
-It cites exact clauses, highlights manual contradictions, and refuses to answer if the manual lacks sufficient information.
-""")
+try:
+    defaults = Settings.from_env()
+except (TypeError, ValueError) as exc:
+    st.error(f"Configuration is invalid: {exc}")
+    st.stop()
 
-# Load models and index
-@st.cache_resource(show_spinner="Loading policy manual index and AI models...")
-def load_system():
-    # Will sys.exit if index not found or similar
-    try:
-        return _load_components()
-    except SystemExit:
-        st.error("Error: FAISS index not found. Please run `python main.py ingest` first.")
-        st.stop()
+backend_options = ["hashing", "sentence-transformers"]
+provider_options = ["deterministic", "gemini"]
 
-# Initialize models
-retriever, generator = load_system()
+with st.sidebar:
+    st.header("Runtime mode")
+    embedding_backend = st.selectbox(
+        "Embedding backend",
+        backend_options,
+        index=backend_options.index(defaults.embedding_backend),
+        help="Hashing is local and reproducible. Sentence Transformers downloads and runs MiniLM locally.",
+    )
+    provider = st.selectbox(
+        "Answer phrasing",
+        provider_options,
+        index=provider_options.index(defaults.llm_provider),
+        help="Deterministic keeps all query processing local. Gemini sends selected excerpts to the configured API.",
+    )
+    st.caption(
+        "Reranking is configured with ENABLE_RERANKING in .env and is disabled by default. "
+        "Restart Streamlit after editing .env. The selected embedding backend must match "
+        "the backend used for ingestion."
+    )
+    if st.button("Clear conversation"):
+        st.session_state.messages = []
+        st.rerun()
 
-if not generator:
-    st.warning("GEMINI_API_KEY is not set. The assistant will retrieve clauses but cannot synthesize a plain-language answer.")
+try:
+    pipeline = _load_pipeline(embedding_backend, provider)
+except (FileNotFoundError, ImportError, RuntimeError, ValueError) as exc:
+    st.error(str(exc))
+    st.code(
+        f"python main.py ingest --embedding-backend {embedding_backend}",
+        language="powershell",
+    )
+    if provider == "gemini":
+        st.caption("Gemini additionally requires GEMINI_API_KEY in .env or the process environment.")
+    st.stop()
 
-# Chat history initialization
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display chat messages
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-        # Render citations/context if available
-        if "citations" in message and message["citations"]:
-            with st.expander("View Cited Clauses"):
-                for c in message["citations"]:
-                    st.markdown(f"**§{c['clause_id']} — {c.get('section', '')}** (lines {c.get('lines', '?')})")
-                    if "text_preview" in c:
-                        st.info(f"\"{c['text_preview']}\"")
-        if "conflicting_clauses" in message and message["conflicting_clauses"]:
-            with st.expander("View Conflicting Clauses"):
-                for conflict in message["conflicting_clauses"]:
-                    st.markdown(f"**§{conflict['clause_a']}**")
-                    st.info(f"\"{conflict['text_a']}\"")
-                    st.markdown(f"**§{conflict['clause_b']}**")
-                    st.info(f"\"{conflict['text_b']}\"")
+        if message["role"] == "user":
+            st.markdown(message["content"])
+        else:
+            _render_answer(message["payload"])
 
-# Input for new question
-if prompt := st.chat_input("Ask a policy question..."):
-    # Add user message to chat history
+if prompt := st.chat_input("Ask a policy question…"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Process answer
     with st.chat_message("assistant"):
-        with st.spinner("Analyzing policy manual..."):
-            result = _ask_question(prompt, verbose=False)
-            
-            state = result.get("state", "unknown")
-            answer = result.get("answer", "Unknown error occurred.")
-            citations = result.get("citations", [])
-            conflicting_clauses = result.get("conflicting_clauses", [])
+        try:
+            started = time.perf_counter()
+            with st.spinner("Retrieving and checking policy evidence…"):
+                answer = pipeline.ask(prompt)
+            elapsed = time.perf_counter() - started
+            payload = answer.model_dump(mode="json")
+            _render_answer(payload)
+            st.caption(f"Completed in {elapsed:.2f}s")
+            st.session_state.messages.append({"role": "assistant", "payload": payload})
+        except Exception:
+            LOGGER.exception("The Streamlit request failed safely")
+            st.error(
+                "The request could not be completed safely, so no policy answer was shown. "
+                "Check the server log and confirm that the index matches the selected backend."
+            )
 
-            # Format the output based on state
-            if state == "answer":
-                st.success("✅ **Answered** based on policy.")
-                st.markdown(answer)
-                
-                if citations:
-                    with st.expander("View Cited Clauses"):
-                        for c in citations:
-                            st.markdown(f"**§{c['clause_id']} — {c.get('section', '')}** (lines {c.get('lines', '?')})")
-                            if "text_preview" in c:
-                                st.info(f"\"{c['text_preview']}\"")
-
-                if result.get("warnings"):
-                    for w in result["warnings"]:
-                        st.warning(f"⚠ {w}")
-                        
-            elif state == "conflict":
-                st.warning("⚠ **Manual Conflict Detected**")
-                st.markdown(answer)
-                
-                if conflicting_clauses:
-                    with st.expander("View Conflicting Clauses"):
-                        for conflict in conflicting_clauses:
-                            st.markdown(f"**§{conflict['clause_a']}**")
-                            st.info(f"\"{conflict['text_a']}\"")
-                            st.markdown(f"**§{conflict['clause_b']}**")
-                            st.info(f"\"{conflict['text_b']}\"")
-                            
-            elif state == "refuse":
-                st.error("🚫 **Unable to Answer**")
-                st.markdown(answer)
-            else:
-                st.markdown(answer)
-            
-            timing_info = []
-            if "retrieval_time" in result:
-                timing_info.append(f"Retrieval: {result['retrieval_time']:.2f}s")
-            if "generation_time" in result:
-                timing_info.append(f"Generation: {result['generation_time']:.2f}s")
-            if timing_info:
-                st.caption(" | ".join(timing_info))
-
-    # Save assistant response to state
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": answer,
-        "citations": citations,
-        "conflicting_clauses": conflicting_clauses
-    })
+st.caption(
+    "Privacy: deterministic mode does not send the question or corpus to an external model. "
+    "Do not enter secrets or unnecessary personal information."
+)

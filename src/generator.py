@@ -1,157 +1,227 @@
-"""
-Grounded answer generator using Gemini API.
+"""Deterministic source-first answer construction and optional LLM phrasing."""
 
-Sends retrieved policy clauses to the LLM with a strict grounding prompt
-that enforces citation discipline and prevents hallucination.
-"""
+from __future__ import annotations
 
-import os
-from typing import Optional
+from pathlib import Path
 
-from google import genai
-
-from src.parser import PolicyClause, format_clause_for_context
-from src.retriever import RetrievalResult
-from src.citations import extract_citations_from_answer, validate_citations, format_citations
-from src.evidence import EvidenceAssessment, AnswerState
-
-
-SYSTEM_PROMPT = """You are a county benefits policy assistant for the Calder County Household Support Program (HSP).
-
-Answer the user's question using ONLY the policy excerpts supplied below. Follow these rules strictly:
-
-1. Do NOT use outside knowledge. Every factual claim must come from the supplied excerpts.
-2. Explain the answer in simple, plain language that a member of the public would understand.
-3. Cite every factual claim using the clause number in the format §X.Y.Z (e.g. §4.3.2).
-4. Never invent or assume the existence of a policy clause.
-5. If the excerpts do not clearly answer the question, say so explicitly.
-6. Never guess eligibility determinations, benefit amounts, or deadlines that are not stated in the excerpts.
-7. If a clause refers to another section (e.g. "see §5.4"), and that section is not in the supplied excerpts, note that the cross-reference could not be verified.
-8. Keep your answer concise — typically 2-4 sentences plus citations.
-
-Format your response as:
-ANSWER: [your plain-language answer with inline §X.Y.Z citations]
-
-SOURCES: [list each clause you relied on, one per line, as "§X.Y.Z — Section title"]
-"""
+from src.citations import CitationIntegrityError, CitationValidator
+from src.evidence import INTENT_TERMS, finding_matches, load_findings
+from src.lexical import tokenize
+from src.models import (
+    Decision,
+    DecisionTrace,
+    EvidenceAssessment,
+    EvidenceLevel,
+    PolicyAnswer,
+    RetrievedClause,
+    SupportType,
+)
+from src.refusal import load_contacts, refusal_text, select_next_step
+from src.retriever import NUMERIC_PASSAGE_RE, NUMERIC_QUESTION_RE
 
 
-class AnswerGenerator:
-    """Generates grounded answers using Gemini API."""
+class AnswerBuilder:
+    """Construct answers only after the decision engine has completed."""
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.0-flash"):
-        self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
-        if not self.api_key:
-            raise ValueError(
-                "Gemini API key required. Set GEMINI_API_KEY environment variable "
-                "or pass api_key parameter."
-            )
-        self.client = genai.Client(api_key=self.api_key)
-        self.model = model
-
-    def generate_answer(
+    def __init__(
         self,
-        question: str,
-        assessment: EvidenceAssessment,
-    ) -> dict:
-        """
-        Generate a grounded answer from the supporting evidence.
-        
-        Only called when assessment.state == ANSWER.
-        
-        Returns a dict with:
-            - answer: The plain-language answer
-            - state: "answer"
-            - citations: list of citation objects
-            - raw_llm_response: The full LLM output
-        """
-        # Build context from supporting results
-        context_parts = []
-        for r in assessment.supporting_results:
-            context_parts.append(format_clause_for_context(r.clause))
+        *,
+        contacts_path: str | Path | None = None,
+        findings_path: str | Path | None = None,
+        llm_provider=None,
+        enable_claim_validation: bool = True,
+    ) -> None:
+        self.contacts = load_contacts(contacts_path)
+        self.findings = load_findings(findings_path)
+        self.llm_provider = llm_provider
+        self.enable_claim_validation = enable_claim_validation
 
-        context = "\n\n".join(context_parts)
+    def build(self, trace: DecisionTrace, *, include_trace: bool = False) -> PolicyAnswer:
+        if trace.decision == Decision.CONFLICT:
+            answer = self._build_conflict(trace)
+        elif trace.decision == Decision.REFUSE:
+            answer = self._build_refusal(trace)
+        else:
+            answer = self._build_answer(trace)
+        return answer.model_copy(update={"trace": trace if include_trace else None})
 
-        # Build the prompt
-        user_prompt = f"""POLICY EXCERPTS:
+    def _build_answer(self, trace: DecisionTrace) -> PolicyAnswer:
+        selected = self._select_direct_sources(trace)
+        validator = CitationValidator(trace.retrieved)
+        source_ids = [item.chunk.chunk_id for item in selected]
+        citations = validator.build(source_ids)
 
-{context}
+        if self.llm_provider is not None:
+            generated = self.llm_provider.generate_structured(trace.question, [item.chunk for item in selected])
+            if generated.decision != Decision.ANSWER:
+                raise CitationIntegrityError(
+                    f"Generator attempted to change trusted decision to {generated.decision.value}"
+                )
+            validator.validate_source_ids(generated.supporting_source_ids)
+            if self.enable_claim_validation:
+                validator.validate_claims(generated.answer, generated.supporting_source_ids)
+            citations = validator.build(generated.supporting_source_ids)
+            answer_text = generated.answer.strip()
+        else:
+            answer_text = self._verbatim_answer(selected)
 
-QUESTION: {question}"""
-
-        # Call the LLM
-        response = self.client.models.generate_content(
-            model=self.model,
-            contents=user_prompt,
-            config={
-                "system_instruction": SYSTEM_PROMPT,
-                "temperature": 0.1,  # Low temperature for factual accuracy
-                "max_output_tokens": 1024,
-            },
+        level = self._evidence_level(trace, source_ids)
+        return PolicyAnswer(
+            decision=Decision.ANSWER,
+            answer=answer_text,
+            citations=citations,
+            evidence_level=level,
+            reason=trace.decision_reason,
         )
 
-        raw_response = response.text
+    def _build_refusal(self, trace: DecisionTrace) -> PolicyAnswer:
+        validator = CitationValidator(trace.retrieved)
+        relevant_ids: list[str] = []
+        for gap in self.findings.get("gaps", []):
+            if finding_matches(trace.question, gap):
+                wanted = set(gap.get("clause_ids", []))
+                relevant_ids = [
+                    item.chunk.chunk_id
+                    for item in trace.retrieved
+                    if item.chunk.clause_id in wanted
+                ]
+                break
+        citations = validator.build(relevant_ids, require_any=False)
+        return PolicyAnswer(
+            decision=Decision.REFUSE,
+            answer=refusal_text(trace),
+            citations=citations,
+            evidence_level=EvidenceLevel.LOW,
+            reason=trace.decision_reason,
+            next_step=select_next_step(trace.question, self.contacts),
+        )
 
-        # Extract and validate citations
-        provided_clauses = [r.clause for r in assessment.supporting_results]
-        cited_ids = extract_citations_from_answer(raw_response)
-        valid_ids, hallucinated_ids = validate_citations(cited_ids, provided_clauses)
-
-        # Format citations for display
-        citations = format_citations(assessment.supporting_results, cited_ids=valid_ids)
-
-        # Build the response
-        result = {
-            "answer": raw_response,
-            "state": "answer",
-            "citations": citations,
-            "raw_llm_response": raw_response,
-            "top_score": assessment.top_score,
+    def _build_conflict(self, trace: DecisionTrace) -> PolicyAnswer:
+        validator = CitationValidator(trace.retrieved)
+        conflict_ids = {
+            chunk_id for finding in trace.conflicts for chunk_id in finding.chunk_ids
         }
+        # Include a direct applicability clause when it is distinct from the two
+        # conflicting consequences (for example, failure to attend an interview).
+        direct = self._direct_pairs(trace)
+        for result, assessment in direct:
+            if result.chunk.chunk_id not in conflict_ids and assessment.score >= 0.62:
+                conflict_ids.add(result.chunk.chunk_id)
+                break
+        ordered_ids = [
+            item.chunk.chunk_id for item in trace.retrieved if item.chunk.chunk_id in conflict_ids
+        ]
+        citations = validator.build(ordered_ids)
+        cited_chunks = validator.validate_source_ids(ordered_ids)
+        lines = ["The manual contains conflicting guidance for this question."]
+        for chunk in cited_chunks:
+            lines.append(f"§{chunk.clause_id}: {chunk.text}")
+        lines.append("Because the manual does not establish which rule controls, I cannot provide a single answer.")
+        return PolicyAnswer(
+            decision=Decision.CONFLICT,
+            answer="\n\n".join(lines),
+            citations=citations,
+            evidence_level=EvidenceLevel.LOW,
+            reason=trace.conflicts[0].explanation,
+            next_step=str(self.contacts["conflict"]["next_step"]),
+        )
 
-        # Warn if any citations were hallucinated
-        if hallucinated_ids:
-            result["warnings"] = [
-                f"The LLM cited §{cid} which was not in the provided context. "
-                f"This citation could not be verified."
-                for cid in hallucinated_ids
-            ]
+    def _select_direct_sources(self, trace: DecisionTrace) -> list[RetrievedClause]:
+        pairs = self._direct_pairs(trace)
+        if not pairs:
+            raise CitationIntegrityError("Decision was ANSWER but no DIRECT sources remained")
 
-        return result
+        selected: list[RetrievedClause] = []
+        if trace.required_aspects:
+            for aspect in trace.required_aspects:
+                aspect_terms = set(tokenize(aspect, expand=True))
+                selected_sections = {item.chunk.section_id for item in selected}
+                ranked = sorted(
+                    pairs,
+                    key=lambda pair: (
+                        self._overlap(aspect_terms, pair[0])
+                        + (0.30 if pair[0].chunk.section_id in selected_sections else 0.0)
+                        + (0.04 if pair[0].chunk.chunk_id not in {item.chunk.chunk_id for item in selected} else 0.0)
+                        + (0.28 if (
+                            bool(NUMERIC_QUESTION_RE.search(aspect))
+                            and bool(NUMERIC_PASSAGE_RE.search(pair[0].chunk.text))
+                        ) else 0.0),
+                        pair[1].score,
+                        pair[0].ranking_score,
+                    ),
+                    reverse=True,
+                )
+                if ranked and self._overlap(aspect_terms, ranked[0][0]) > 0:
+                    self._append_unique(selected, ranked[0][0])
+        else:
+            best = max(pairs, key=lambda pair: (pair[1].score, pair[0].ranking_score))
+            selected.append(best[0])
 
-    def check_conflict(
-        self,
-        question: str,
-        clause_a: PolicyClause,
-        clause_b: PolicyClause,
-    ) -> bool:
-        """
-        Use the LLM to check if two clauses contradict each other
-        in the context of the user's question.
-        
-        Returns True if a contradiction is detected.
-        """
-        prompt = f"""Given the following two policy clauses and a user question, determine if the clauses contradict each other on the matter raised by the question.
+        # "Including exceptions" calls for every direct clause in the selected
+        # rule's section so neither the standard nor extended rule is hidden.
+        if "exception" in trace.question.lower() and selected:
+            sections = {item.chunk.section_id for item in selected}
+            for result, assessment in pairs:
+                if result.chunk.section_id in sections and assessment.score >= 0.58:
+                    self._append_unique(selected, result)
 
-CLAUSE A (§{clause_a.clause_id}):
-{clause_a.display_text()}
+        # A selected cross-reference can be material to a compound answer (for
+        # example the review-completion period incorporated by §12.1.3).
+        selected_clause_ids = {item.chunk.clause_id for item in selected}
+        selected_refs = {reference for item in selected for reference in item.chunk.cross_references}
+        for result, assessment in pairs:
+            if (
+                result.chunk.clause_id in selected_refs
+                or result.chunk.section_id in selected_refs
+            ) and assessment.score >= 0.58:
+                self._append_unique(selected, result)
 
-CLAUSE B (§{clause_b.clause_id}):
-{clause_b.display_text()}
+        if not selected:
+            selected.append(max(pairs, key=lambda pair: pair[1].score)[0])
+        return selected[:6]
 
-QUESTION: {question}
+    @staticmethod
+    def _append_unique(items: list[RetrievedClause], candidate: RetrievedClause) -> None:
+        if all(item.chunk.chunk_id != candidate.chunk.chunk_id for item in items):
+            items.append(candidate)
 
-Do these two clauses provide contradictory guidance on this question? Answer with exactly "YES" or "NO" followed by a brief explanation."""
+    @staticmethod
+    def _overlap(aspect_terms: set[str], result: RetrievedClause) -> float:
+        document_terms = set(tokenize(f"{result.chunk.section_title or ''} {result.chunk.text}", expand=False))
+        full = len(aspect_terms & document_terms) / max(1, len(aspect_terms))
+        subject_terms = aspect_terms - INTENT_TERMS
+        if not subject_terms:
+            return full
+        subject = len(subject_terms & document_terms) / len(subject_terms)
+        return 0.70 * subject + 0.30 * full
 
-        try:
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=prompt,
-                config={
-                    "temperature": 0.0,
-                    "max_output_tokens": 200,
-                },
-            )
-            return response.text.strip().upper().startswith("YES")
-        except Exception:
-            return False
+    @staticmethod
+    def _direct_pairs(trace: DecisionTrace) -> list[tuple[RetrievedClause, EvidenceAssessment]]:
+        by_id = {item.chunk_id: item for item in trace.evidence}
+        return [
+            (result, by_id[result.chunk.chunk_id])
+            for result in trace.retrieved
+            if result.chunk.chunk_id in by_id
+            and by_id[result.chunk.chunk_id].support_type == SupportType.DIRECT
+        ]
+
+    @staticmethod
+    def _verbatim_answer(selected: list[RetrievedClause]) -> str:
+        if len(selected) == 1:
+            chunk = selected[0].chunk
+            return f"The manual states in §{chunk.clause_id}: {chunk.text}"
+        lines = ["The manual states:"]
+        lines.extend(f"- §{item.chunk.clause_id}: {item.chunk.text}" for item in selected)
+        return "\n".join(lines)
+
+    @staticmethod
+    def _evidence_level(trace: DecisionTrace, source_ids: list[str]) -> EvidenceLevel:
+        scores = [item.score for item in trace.evidence if item.chunk_id in source_ids]
+        if scores and min(scores) >= 0.72:
+            return EvidenceLevel.HIGH
+        return EvidenceLevel.MEDIUM
+
+
+# The old AnswerGenerator name remains an alias for imports, but callers should
+# instantiate AnswerBuilder and optionally inject an LLMProvider.
+AnswerGenerator = AnswerBuilder

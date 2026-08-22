@@ -1,340 +1,249 @@
-"""
-The Grounded Answer — CLI Entry Point
+"""Command-line interface for The Grounded Answer.
 
-Citation-aware RAG assistant for the Calder County HSP policy manual.
-
-Usage:
-    python main.py ingest                          Build the vector index
-    python main.py ask "your question here"        Ask a policy question
-    python main.py show-clause 4.3.2               Show a specific clause
-    python main.py evaluate                        Run the evaluation suite
-    python main.py interactive                     Interactive Q&A session
+Examples:
+    python main.py ingest
+    python main.py ask "What is the household resource limit?"
+    python main.py source 2.4.1
+    python main.py evaluate
+    python main.py calibrate
 """
+
+from __future__ import annotations
 
 import argparse
 import json
-import os
+import logging
 import sys
-import time
+from functools import lru_cache
 from pathlib import Path
 
-# Project root
-ROOT = Path(__file__).parent
-DATA_DIR = ROOT / "data"
-INDEX_DIR = DATA_DIR / "faiss_index"
-MANUAL_PATH = DATA_DIR / "policy-manual.md"
+from config.settings import Settings
+from src.models import Decision, PolicyAnswer
+from src.parser import build_corpus_report, find_chunks, parse_policy_manual
+from src.pipeline import GroundedAnswerPipeline, ingest_corpus, load_source_chunks
 
 
-def cmd_ingest(args):
-    """Parse the policy manual and build the FAISS index."""
-    from src.parser import parse_policy_manual
-    from src.embeddings import EmbeddingEngine
-    from src.vector_store import VectorStore
-
-    print("=" * 60)
-    print("INGESTING POLICY MANUAL")
-    print("=" * 60)
-
-    # Parse
-    print(f"\n📄 Parsing {MANUAL_PATH}...")
-    clauses = parse_policy_manual(MANUAL_PATH)
-    print(f"   Found {len(clauses)} clauses across {len(set(c.part for c in clauses))} parts.")
-
-    # Embed
-    print(f"\n🔤 Generating embeddings...")
-    engine = EmbeddingEngine()
-    embeddings = engine.encode_clauses(clauses)
-    print(f"   Generated {embeddings.shape[0]} embeddings of dimension {embeddings.shape[1]}.")
-
-    # Store
-    print(f"\n💾 Building FAISS index...")
-    store = VectorStore(dimension=engine.dimension)
-    store.build(embeddings, clauses)
-    store.save(INDEX_DIR)
-    print(f"   Saved index to {INDEX_DIR}")
-
-    print(f"\n✅ Ingestion complete. Ready to answer questions.")
+def _settings(args: argparse.Namespace) -> Settings:
+    return Settings.from_env(
+        corpus_path=getattr(args, "corpus", None),
+        embedding_backend=getattr(args, "embedding_backend", None),
+        llm_provider=getattr(args, "provider", None),
+    )
 
 
-def cmd_ask(args):
-    """Ask a single policy question."""
-    question = args.question
-    if not question:
-        print("Error: Please provide a question.")
-        sys.exit(1)
-
-    result = _ask_question(question, verbose=args.verbose)
-    _print_result(result)
+def _configure_logging(settings: Settings, debug: bool = False) -> None:
+    level = logging.DEBUG if debug else getattr(logging, settings.log_level, logging.WARNING)
+    logging.basicConfig(level=level, format="%(levelname)s %(name)s: %(message)s")
 
 
-def cmd_show_clause(args):
-    """Show a specific clause from the manual."""
-    from src.parser import parse_policy_manual, format_clause_for_context
-
-    clauses = parse_policy_manual(MANUAL_PATH)
-    target = args.clause_id
-
-    found = [c for c in clauses if c.clause_id == target]
-    if not found:
-        # Try partial match
-        found = [c for c in clauses if c.clause_id.startswith(target)]
-
-    if not found:
-        print(f"Clause §{target} not found in the manual.")
-        print(f"Available clause IDs: {', '.join(c.clause_id for c in clauses[:20])}...")
-        sys.exit(1)
-
-    for c in found:
-        print("─" * 60)
-        print(format_clause_for_context(c))
-        print(f"\n{c.part}")
-        print("─" * 60)
+def cmd_ingest(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    _configure_logging(settings)
+    report, manifest = ingest_corpus(settings)
+    print("Corpus indexed successfully")
+    print()
+    print(f"Document:          {report.document_name}")
+    print(f"Version:           {report.document_version or 'not stated'}")
+    print(f"Source SHA-256:     {report.source_sha256}")
+    print(f"Parts:             {report.parts}")
+    print(f"Sections:          {report.sections}")
+    print(f"Clauses / chunks:  {report.clauses} / {report.chunks}")
+    print("Pages:             unavailable in the Markdown source")
+    print(f"Embedding backend: {manifest['embedding_backend']}")
+    print(f"Embedding model:   {manifest['embedding_model']}")
+    print(f"Vector dimension:  {manifest['dimension']}")
+    print(f"Index:             {settings.index_dir}")
+    print(f"Corpus report:     {settings.corpus_report_path}")
+    return 0
 
 
-def cmd_interactive(args):
-    """Interactive Q&A session."""
-    print("=" * 60)
+def cmd_ask(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    _configure_logging(settings, args.debug)
+    pipeline = GroundedAnswerPipeline.load(settings)
+    answer = pipeline.ask(args.question, include_trace=args.debug)
+    if args.json:
+        print(answer.model_dump_json(indent=2))
+    else:
+        print_policy_answer(answer, debug=args.debug)
+    return 0
+
+
+def print_policy_answer(answer: PolicyAnswer, *, debug: bool = False) -> None:
+    print(f"STATUS: {answer.decision.value}")
+    print()
+    print(answer.answer)
+    if answer.reason:
+        print()
+        print("WHY")
+        print(answer.reason)
+    if answer.next_step:
+        print()
+        print("NEXT STEP")
+        print(answer.next_step)
+    if answer.citations:
+        print()
+        print("SOURCES")
+        for citation in answer.citations:
+            label = f"§{citation.clause_id}" if citation.clause_id else citation.chunk_id
+            location = f"lines {citation.line_start}-{citation.line_end}"
+            if citation.page is not None:
+                location = f"page {citation.page}; {location}"
+            print(f"{label} — {citation.section_title or 'Untitled section'} ({location})")
+            print(f'"{citation.excerpt}"')
+            print()
+    print(f"Evidence: {answer.evidence_level.value}")
+    if debug and answer.trace:
+        print()
+        print("DEBUG TRACE")
+        print(answer.trace.model_dump_json(indent=2))
+
+
+def cmd_source(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    chunks = load_source_chunks(settings)
+    matches = find_chunks(chunks, args.source_id)
+    if not matches:
+        print(f"No source found for {args.source_id!r}.", file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps([chunk.model_dump(mode="json") for chunk in matches], indent=2, ensure_ascii=False))
+        return 0
+    for index, chunk in enumerate(matches):
+        if index:
+            print()
+        label = f"§{chunk.clause_id}" if chunk.clause_id else chunk.chunk_id
+        print(f"{label} — {chunk.section_id} {chunk.section_title}")
+        print(f"Document: {chunk.document_name} ({chunk.document_version or 'version not stated'})")
+        print(f"Page: unavailable | Lines: {chunk.line_start}-{chunk.line_end}")
+        print(f"Source ID: {chunk.chunk_id}")
+        print()
+        print("FULL SOURCE TEXT")
+        print(chunk.source_text)
+    return 0
+
+
+def cmd_corpus_report(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    chunks = parse_policy_manual(settings.corpus_path)
+    report = build_corpus_report(settings.corpus_path, chunks)
+    print(report.model_dump_json(indent=2))
+    return 0
+
+
+def cmd_evaluate(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    _configure_logging(settings)
+    from evaluation.evaluate import run_evaluation
+
+    report = run_evaluation(settings=settings, quiet=args.quiet)
+    return 0 if report["failures"] == 0 else 1
+
+
+def cmd_calibrate(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    _configure_logging(settings)
+    from evaluation.calibration import run_calibration
+
+    run_calibration(settings=settings)
+    return 0
+
+
+def cmd_interactive(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    _configure_logging(settings)
+    pipeline = GroundedAnswerPipeline.load(settings)
     print("THE GROUNDED ANSWER")
-    print("Calder County Household Support Program Policy Assistant")
-    print("=" * 60)
-    print("\nType your question and press Enter. Type 'quit' to exit.\n")
-
+    print("Policy-grounded decision support. Type 'quit' to exit.")
     while True:
         try:
-            question = input("❓ Question: ").strip()
+            question = input("\nQuestion: ").strip()
         except (EOFError, KeyboardInterrupt):
-            print("\nGoodbye.")
-            break
-
+            print()
+            return 0
+        if question.lower() in {"quit", "exit", "q"}:
+            return 0
         if not question:
             continue
-        if question.lower() in ("quit", "exit", "q"):
-            print("Goodbye.")
-            break
-
         print()
-        result = _ask_question(question, verbose=False)
-        _print_result(result)
-        print()
+        print_policy_answer(pipeline.ask(question))
 
 
-def cmd_evaluate(args):
-    """Run the evaluation suite."""
-    # Import here to avoid loading models unnecessarily
-    eval_path = ROOT / "evaluation" / "evaluate.py"
-    if not eval_path.exists():
-        print("Evaluation suite not found. Create evaluation/evaluate.py first.")
-        sys.exit(1)
-
-    # Run evaluate.py as a module
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("evaluate", eval_path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    mod.run_evaluation()
-
-
-def _load_components():
-    """Load the retriever and generator (cached after first call)."""
-    if not hasattr(_load_components, "_cache"):
-        from src.embeddings import EmbeddingEngine
-        from src.vector_store import VectorStore
-        from src.retriever import Retriever
-        from src.generator import AnswerGenerator
-
-        if not INDEX_DIR.exists():
-            print("Error: Index not found. Run 'python main.py ingest' first.")
-            sys.exit(1)
-
-        print("Loading models...", end=" ", flush=True)
-        engine = EmbeddingEngine()
-
-        store = VectorStore(dimension=engine.dimension)
-        store.load(INDEX_DIR)
-
-        retriever = Retriever(engine, store, use_reranker=True)
-
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key:
-            print("\n⚠ Warning: GEMINI_API_KEY not set. LLM answers will not be available.")
-            generator = None
-        else:
-            generator = AnswerGenerator(api_key=api_key)
-
-        print("done.")
-        _load_components._cache = (retriever, generator)
-
-    return _load_components._cache
+@lru_cache(maxsize=4)
+def _cached_pipeline(backend: str = "hashing", provider: str = "deterministic") -> GroundedAnswerPipeline:
+    settings = Settings.from_env(embedding_backend=backend, llm_provider=provider)
+    return GroundedAnswerPipeline.load(settings)
 
 
 def _ask_question(question: str, verbose: bool = False) -> dict:
-    """Core question-answering pipeline."""
-    from src.evidence import assess_evidence, AnswerState
-    from src.refusal import generate_refusal
-    from src.contradiction import generate_contradiction_response
+    """Compatibility adapter used by the optional Streamlit application."""
 
-    retriever, generator = _load_components()
-
-    # Step 1: Retrieve relevant clauses
-    start = time.time()
-    results = retriever.retrieve(question)
-    retrieval_time = time.time() - start
-
-    if verbose:
-        print(f"\n📊 Retrieved {len(results)} clauses in {retrieval_time:.2f}s:")
-        for r in results:
-            print(f"   §{r.clause.clause_id} (score: {r.final_score:.3f})")
-
-    # Step 2: Assess evidence
-    llm_conflict_checker = None
-    if generator is not None:
-        llm_conflict_checker = generator.check_conflict
-
-    assessment = assess_evidence(question, results, llm_conflict_checker=llm_conflict_checker)
-
-    if verbose:
-        print(f"\n📋 Evidence assessment: {assessment.state.value}")
-        print(f"   Reason: {assessment.reason}")
-
-    # Step 3: Generate appropriate response
-    if assessment.state == AnswerState.REFUSE:
-        result = generate_refusal(question, assessment)
-    elif assessment.state == AnswerState.CONFLICT:
-        result = generate_contradiction_response(question, assessment)
-    elif assessment.state == AnswerState.ANSWER:
-        if generator is None:
-            # Fallback: show clauses without LLM synthesis
-            result = _fallback_answer(assessment)
-        else:
-            start = time.time()
-            result = generator.generate_answer(question, assessment)
-            result["generation_time"] = time.time() - start
-    else:
-        result = generate_refusal(question, assessment)
-
-    result["retrieval_time"] = retrieval_time
-    result["question"] = question
-    return result
+    answer = _cached_pipeline().ask(question, include_trace=verbose)
+    payload = answer.model_dump(mode="json")
+    payload["state"] = answer.decision.value.lower()
+    return payload
 
 
-def _fallback_answer(assessment) -> dict:
-    """Generate a response without the LLM, showing raw clauses."""
-    from src.parser import format_clause_for_context
-
-    parts = ["The following clauses appear relevant to your question:\n"]
-    citations = []
-    for r in assessment.supporting_results:
-        parts.append(format_clause_for_context(r.clause))
-        parts.append("")
-        citations.append({
-            "clause_id": r.clause.clause_id,
-            "section": r.clause.section,
-            "part": r.clause.part,
-            "lines": f"{r.clause.line_start}-{r.clause.line_end}",
-            "score": round(r.final_score, 3),
-        })
-
-    return {
-        "answer": "\n".join(parts),
-        "state": "answer",
-        "citations": citations,
-        "top_score": assessment.top_score,
-        "note": "LLM not available — showing raw clause text.",
-    }
-
-
-def _print_result(result: dict):
-    """Pretty-print a response to the terminal."""
-    state = result.get("state", "unknown")
-
-    if state == "answer":
-        print("─" * 60)
-        print("✅ ANSWER")
-        print("─" * 60)
-        print(result["answer"])
-
-        if result.get("citations"):
-            print("\n📑 SOURCES:")
-            for c in result["citations"]:
-                print(f"   §{c['clause_id']} — {c.get('section', '')} (lines {c.get('lines', '?')})")
-
-        if result.get("warnings"):
-            print("\n⚠ WARNINGS:")
-            for w in result["warnings"]:
-                print(f"   {w}")
-
-    elif state == "conflict":
-        print("─" * 60)
-        print("⚠ MANUAL CONFLICT")
-        print("─" * 60)
-        print(result["answer"])
-
-        if result.get("citations"):
-            print("\n📑 SOURCES:")
-            for c in result["citations"]:
-                print(f"   §{c['clause_id']} — {c.get('section', '')} (lines {c.get('lines', '?')})")
-
-    elif state == "refuse":
-        print("─" * 60)
-        print("🚫 UNABLE TO ANSWER")
-        print("─" * 60)
-        print(result["answer"])
-
-    else:
-        print(result.get("answer", "Unknown error."))
-
-    # Timing info
-    times = []
-    if "retrieval_time" in result:
-        times.append(f"retrieval: {result['retrieval_time']:.2f}s")
-    if "generation_time" in result:
-        times.append(f"generation: {result['generation_time']:.2f}s")
-    if times:
-        print(f"\n⏱ {', '.join(times)}")
-
-
-def main():
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="The Grounded Answer — Policy Manual RAG Assistant",
+        description="Citation-aware, refusal-calibrated policy evidence assistant",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+    commands = parser.add_subparsers(dest="command", required=True)
 
-    # ingest
-    sub_ingest = subparsers.add_parser("ingest", help="Parse the manual and build the vector index")
+    ingest = commands.add_parser("ingest", help="Parse the real corpus and build the policy index")
+    ingest.add_argument("--corpus", type=Path, help="Path to the supplied Markdown corpus")
+    ingest.add_argument(
+        "--embedding-backend",
+        choices=("hashing", "sentence-transformers"),
+        help="Dense embedding backend (default: environment or hashing)",
+    )
+    ingest.set_defaults(func=cmd_ingest)
 
-    # ask
-    sub_ask = subparsers.add_parser("ask", help="Ask a policy question")
-    sub_ask.add_argument("question", type=str, help="The question to ask")
-    sub_ask.add_argument("-v", "--verbose", action="store_true", help="Show retrieval details")
+    ask = commands.add_parser("ask", help="Ask one plain-language policy question")
+    ask.add_argument("question")
+    ask.add_argument("--corpus", type=Path, help=argparse.SUPPRESS)
+    ask.add_argument("--embedding-backend", choices=("hashing", "sentence-transformers"))
+    ask.add_argument("--provider", choices=("deterministic", "gemini"))
+    ask.add_argument("--debug", action="store_true", help="Show retrieval/evidence/decision trace")
+    ask.add_argument("--json", action="store_true", help="Emit the validated response as JSON")
+    ask.set_defaults(func=cmd_ask)
 
-    # show-clause
-    sub_show = subparsers.add_parser("show-clause", help="Display a specific policy clause")
-    sub_show.add_argument("clause_id", type=str, help="Clause ID (e.g. 4.3.2)")
+    source = commands.add_parser("source", aliases=["show-clause"], help="Show exact source text")
+    source.add_argument("source_id", help="Opaque chunk ID, official clause ID, or section ID")
+    source.add_argument("--corpus", type=Path, help=argparse.SUPPRESS)
+    source.add_argument("--json", action="store_true")
+    source.set_defaults(func=cmd_source)
 
-    # interactive
-    sub_interactive = subparsers.add_parser("interactive", help="Interactive Q&A session")
+    report = commands.add_parser("corpus-report", help="Inspect corpus structure without indexing")
+    report.add_argument("--corpus", type=Path)
+    report.set_defaults(func=cmd_corpus_report)
 
-    # evaluate
-    sub_eval = subparsers.add_parser("evaluate", help="Run the evaluation suite")
+    evaluate = commands.add_parser("evaluate", help="Run the source-derived evaluation set")
+    evaluate.add_argument("--quiet", action="store_true", help="Print only summary and failures")
+    evaluate.add_argument("--embedding-backend", choices=("hashing", "sentence-transformers"))
+    evaluate.set_defaults(func=cmd_evaluate)
 
-    args = parser.parse_args()
+    calibrate = commands.add_parser("calibrate", help="Sweep support thresholds over the evaluation set")
+    calibrate.add_argument("--embedding-backend", choices=("hashing", "sentence-transformers"))
+    calibrate.set_defaults(func=cmd_calibrate)
 
-    if args.command is None:
-        parser.print_help()
-        sys.exit(0)
+    interactive = commands.add_parser("interactive", help="Ask multiple independent questions")
+    interactive.add_argument("--embedding-backend", choices=("hashing", "sentence-transformers"))
+    interactive.set_defaults(func=cmd_interactive)
+    return parser
 
-    commands = {
-        "ingest": cmd_ingest,
-        "ask": cmd_ask,
-        "show-clause": cmd_show_clause,
-        "interactive": cmd_interactive,
-        "evaluate": cmd_evaluate,
-    }
 
-    commands[args.command](args)
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    try:
+        return int(args.func(args))
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

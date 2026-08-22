@@ -1,0 +1,224 @@
+"""Composition root for the source-first policy evidence pipeline."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import logging
+from pathlib import Path
+
+from config.settings import Settings
+from src.decision_engine import DecisionEngine
+from src.embeddings import EmbeddingEngine
+from src.evidence import EvidenceAnalyzer
+from src.generator import AnswerBuilder
+from src.models import Decision, EvidenceLevel, IngestionReport, PolicyAnswer, PolicyChunk
+from src.parser import (
+    build_corpus_report,
+    find_chunks,
+    parse_policy_manual,
+    persist_chunks,
+)
+from src.refusal import load_contacts, select_next_step
+from src.retriever import Retriever
+from src.vector_store import IndexIntegrityError, VectorStore
+
+
+LOGGER = logging.getLogger("grounded_answer")
+
+
+def ingest_corpus(settings: Settings) -> tuple[IngestionReport, dict]:
+    """Parse, persist, embed, and index the configured source corpus."""
+
+    chunks = parse_policy_manual(settings.corpus_path)
+    report = build_corpus_report(settings.corpus_path, chunks)
+    persist_chunks(chunks, report, settings.processed_path, settings.corpus_report_path)
+
+    engine = EmbeddingEngine(
+        settings.embedding_model,
+        backend=settings.embedding_backend,
+        dimension=settings.embedding_dimension,
+    )
+    embeddings = engine.encode_clauses(chunks)
+    store = VectorStore(engine.dimension)
+    store.build(
+        embeddings,
+        chunks,
+        embedding_backend=engine.backend,
+        embedding_model=engine.model_name,
+        corpus_sha256=report.source_sha256,
+    )
+    store.save(settings.index_dir)
+    return report, store.manifest
+
+
+class GroundedAnswerPipeline:
+    """Retrieve → assess → detect conflicts → decide → build → validate."""
+
+    def __init__(
+        self,
+        settings: Settings,
+        embedding_engine: EmbeddingEngine,
+        store: VectorStore,
+        *,
+        llm_provider=None,
+    ) -> None:
+        self.settings = settings
+        self.embedding_engine = embedding_engine
+        self.store = store
+        self.retriever = Retriever(
+            embedding_engine,
+            store,
+            use_hybrid=settings.enable_hybrid_search,
+            use_reranker=settings.enable_reranking,
+            use_neighbors=settings.enable_neighbor_retrieval,
+            initial_k=settings.initial_retrieval_k,
+            rerank_k=settings.rerank_k,
+            final_k=settings.final_k,
+            rrf_k=settings.rrf_k,
+            reranker_model=settings.reranker_model,
+            findings_path=settings.findings_path,
+        )
+        self.evidence_analyzer = EvidenceAnalyzer(
+            store.chunks,
+            refusal_threshold=settings.refusal_threshold,
+            direct_coverage_threshold=settings.direct_coverage_threshold,
+            findings_path=settings.findings_path,
+        )
+        self.decision_engine = DecisionEngine(
+            refusal_threshold=settings.refusal_threshold,
+            findings_path=settings.findings_path,
+            enable_conflict_check=settings.enable_contradiction_check,
+        )
+        self.answer_builder = AnswerBuilder(
+            contacts_path=settings.contacts_path,
+            findings_path=settings.findings_path,
+            llm_provider=llm_provider,
+            enable_claim_validation=settings.enable_claim_validation,
+        )
+
+    @classmethod
+    def load(cls, settings: Settings) -> "GroundedAnswerPipeline":
+        manifest_path = settings.index_dir / VectorStore.MANIFEST_NAME
+        if not manifest_path.exists():
+            raise FileNotFoundError(
+                f"Policy index not found at {settings.index_dir}. Run `python main.py ingest` first."
+            )
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise IndexIntegrityError("Index manifest is unreadable; rebuild the index") from exc
+
+        backend = manifest.get("embedding_backend")
+        model = manifest.get("embedding_model")
+        dimension = int(manifest.get("dimension", -1))
+        if backend != settings.embedding_backend:
+            raise IndexIntegrityError(
+                f"Configured embedding backend {settings.embedding_backend!r} does not match indexed "
+                f"backend {backend!r}. Re-run ingest with the desired backend."
+            )
+        if backend == "sentence-transformers" and model != settings.embedding_model:
+            raise IndexIntegrityError(
+                f"Configured embedding model {settings.embedding_model!r} does not match index model {model!r}."
+            )
+
+        engine = EmbeddingEngine(
+            settings.embedding_model,
+            backend=backend,
+            dimension=dimension,
+        )
+        store = VectorStore(engine.dimension)
+        store.load(settings.index_dir)
+        cls._validate_corpus_identity(settings.corpus_path, store.manifest)
+        cls._validate_chunk_metadata(settings.corpus_path, store.chunks)
+
+        provider = None
+        if settings.llm_provider == "gemini":
+            from src.llm import GeminiProvider
+
+            provider = GeminiProvider(
+                api_key=settings.gemini_api_key,
+                model=settings.gemini_model,
+            )
+        return cls(settings, engine, store, llm_provider=provider)
+
+    @staticmethod
+    def _validate_corpus_identity(corpus_path: Path, manifest: dict) -> None:
+        if not corpus_path.exists():
+            raise FileNotFoundError(f"Configured policy corpus is missing: {corpus_path}")
+        actual = hashlib.sha256(corpus_path.read_bytes()).hexdigest()
+        expected = manifest.get("corpus_sha256")
+        if not expected or actual != expected:
+            raise IndexIntegrityError(
+                "The corpus differs from the indexed source. Run `python main.py ingest` before asking questions."
+            )
+
+    @staticmethod
+    def _validate_chunk_metadata(corpus_path: Path, indexed: list[PolicyChunk]) -> None:
+        """Ensure citation metadata is a faithful derivation of the source file."""
+
+        canonical = parse_policy_manual(corpus_path)
+        if len(canonical) != len(indexed):
+            raise IndexIntegrityError(
+                "Indexed citation metadata does not match the source corpus; run `python main.py ingest`."
+            )
+        for expected, actual in zip(canonical, indexed, strict=True):
+            if expected.model_dump(mode="json") != actual.model_dump(mode="json"):
+                raise IndexIntegrityError(
+                    "Indexed citation metadata does not match the source corpus; run `python main.py ingest`."
+                )
+
+    def ask(self, question: str, *, include_trace: bool = False) -> PolicyAnswer:
+        normalized = question.strip()
+        if not normalized:
+            raise ValueError("Question must not be empty")
+        retrieved = self.retriever.retrieve(normalized)
+        evidence = self.evidence_analyzer.assess(normalized, retrieved)
+        trace = self.decision_engine.decide(normalized, retrieved, evidence)
+        try:
+            answer = self.answer_builder.build(trace, include_trace=include_trace)
+            citation_status = "valid"
+        except Exception as exc:
+            # Generation/provider/citation failures can never fall through to an
+            # unvalidated answer. Convert them into an explicit safe refusal.
+            safe_trace = trace.model_copy(
+                update={
+                    "decision": Decision.REFUSE,
+                    "decision_reason": (
+                        "A generated answer failed the citation or provider safety check "
+                        f"({type(exc).__name__}); no policy answer was shown."
+                    ),
+                }
+            )
+            contacts = load_contacts(self.settings.contacts_path)
+            answer = PolicyAnswer(
+                decision=Decision.REFUSE,
+                answer=(
+                    "I don't know based on the current policy manual. "
+                    "A safe, citation-validated answer could not be produced."
+                ),
+                evidence_level=EvidenceLevel.LOW,
+                reason=safe_trace.decision_reason,
+                next_step=select_next_step(normalized, contacts),
+                trace=safe_trace if include_trace else None,
+            )
+            citation_status = "rejected"
+
+        LOGGER.info(
+            "query=%r retrieved=%s decision=%s reason=%r citation_validation=%s",
+            normalized,
+            [item.chunk.chunk_id for item in retrieved],
+            answer.decision.value,
+            answer.reason,
+            citation_status,
+        )
+        return answer
+
+    def source(self, source_id: str) -> list[PolicyChunk]:
+        return find_chunks(self.store.chunks, source_id)
+
+
+def load_source_chunks(settings: Settings) -> list[PolicyChunk]:
+    """Read source lookup metadata directly from the authoritative corpus."""
+
+    return parse_policy_manual(settings.corpus_path)
