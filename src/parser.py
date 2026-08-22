@@ -1,250 +1,304 @@
-"""
-Clause-level parser for the Calder County HSP policy manual.
+"""Exact-source, clause-aware ingestion for the supplied Markdown manual."""
 
-Reads the Markdown policy manual and splits it into structured chunks,
-preserving the legal hierarchy: Part -> Section -> Clause.
+from __future__ import annotations
 
-Each chunk is a complete policy clause with metadata for citation.
-"""
-
+import hashlib
+import json
 import re
-from dataclasses import dataclass, field, asdict
+from collections import defaultdict
 from pathlib import Path
-from typing import Optional
+from typing import Iterable
+
+from src.models import IngestionReport, PolicyChunk
 
 
-@dataclass
-class PolicyClause:
-    """A single policy clause with its full metadata for citation."""
-    clause_id: str              # e.g. "4.3.2"
-    text: str                   # The full text of the clause
-    part: str                   # e.g. "Part 4 — Exclusions"
-    section: str                # e.g. "4.3 Recipient obligations"
-    line_start: int             # Line number in source file
-    line_end: int               # Line number in source file
-    sub_items: list[str] = field(default_factory=list)  # (a), (b), (c) items
-
-    def full_reference(self) -> str:
-        """Format a citation reference string."""
-        return f"§{self.clause_id} — {self.section}, lines {self.line_start}-{self.line_end}"
-
-    def short_reference(self) -> str:
-        """Short citation for inline use."""
-        return f"§{self.clause_id}"
-
-    def to_dict(self) -> dict:
-        return asdict(self)
-
-    def display_text(self) -> str:
-        """The clause text formatted for display, including sub-items."""
-        result = self.text
-        if self.sub_items:
-            result += "\n" + "\n".join(self.sub_items)
-        return result
+PART_RE = re.compile(r"^#\s+Part\s+(\d+)\s*[—–-]\s*(.+?)\s*$")
+SECTION_RE = re.compile(r"^##\s+(\d+\.\d+)\s+(.+?)\s*$")
+CLAUSE_RE = re.compile(r"^\*\*(\d+\.\d+\.\d+)(?:\s+([^*]+?))?\*\*\s*(.*)$")
+CROSS_REF_RE = re.compile(r"§(\d+\.\d+(?:\.\d+)?)")
+VERSION_RE = re.compile(r"Consolidated text as at\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})", re.I)
 
 
-def parse_policy_manual(filepath: str | Path) -> list[PolicyClause]:
+class CorpusParseError(ValueError):
+    """Raised when the supplied corpus does not match its declared structure."""
+
+
+def _document_id(path: Path) -> str:
+    stem = re.sub(r"[^a-z0-9]+", "-", path.stem.lower()).strip("-")
+    if stem == "policy-manual":
+        return "calder-hsp-policy-manual"
+    return stem or "policy-document"
+
+
+def _normalized(text: str) -> str:
+    without_markdown = text.replace("**", "").replace("`", "")
+    return re.sub(r"\s+", " ", without_markdown).strip()
+
+
+def _display_text(raw_text: str) -> str:
+    """Remove emphasis markup while retaining policy wording and layout."""
+
+    return raw_text.replace("**", "").replace("`", "").strip()
+
+
+def _line_byte_offsets(lines: list[str]) -> list[int]:
+    offsets = [0]
+    total = 0
+    for line in lines:
+        total += len(line.encode("utf-8"))
+        offsets.append(total)
+    return offsets
+
+
+def parse_policy_manual(filepath: str | Path) -> list[PolicyChunk]:
+    """Parse official `X.Y.Z` provisions without inventing page metadata.
+
+    The returned half-open offsets are UTF-8 byte offsets into the original file.
+    `source_text` contains the exact Markdown source for the provision; `raw_text`
+    removes only the bold clause-ID marker; and `normalized_text` is retrieval-only.
     """
-    Parse the Markdown policy manual into structured clause objects.
-    
-    The manual uses this structure:
-        # Part X — Title          (Part heading)
-        ## X.Y Title              (Section heading)
-        **X.Y.Z** Text...        (Clause with optional sub-items)
-        **X.Y.Z Title** — Text   (Clause with title in bold)
-    
-    Sub-items are lines starting with (a), (b), etc.
-    
-    Returns a list of PolicyClause objects ready for embedding.
-    """
-    filepath = Path(filepath)
-    lines = filepath.read_text(encoding="utf-8").splitlines()
 
-    clauses: list[PolicyClause] = []
-    current_part: str = ""
-    current_section: str = ""
+    path = Path(filepath).expanduser().resolve()
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Policy corpus not found at {path}. Place the supplied policy-manual.md "
+            "there or pass --corpus PATH."
+        )
+    raw_bytes = path.read_bytes()
+    try:
+        source = raw_bytes.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise CorpusParseError(f"Corpus must be UTF-8 text: {path}") from exc
 
-    # Patterns
-    part_pattern = re.compile(r"^#\s+Part\s+(\d+)\s*[—–-]\s*(.+)$")
-    section_pattern = re.compile(r"^##\s+(\d+\.\d+)\s+(.+)$")
-    # Match **X.Y.Z** or **X.Y.Z Title** at start of line
-    clause_pattern = re.compile(r"^\*\*(\d+\.\d+\.\d+)(?:\s+([^*]+?))?\*\*\s*(.*)$")
-    # Sub-items: (a), (b), etc. — possibly indented
-    sub_item_pattern = re.compile(r"^\s*\(([a-z])\)\s+(.+)$")
-    # Continuation line (not a heading, not a blank, not a new clause)
-    # Table rows
-    table_pattern = re.compile(r"^\|")
+    lines = source.splitlines(keepends=True)
+    byte_offsets = _line_byte_offsets(lines)
+    version_match = VERSION_RE.search(source)
+    document_version = version_match.group(1) if version_match else None
+    effective_date = "2025-12-31" if document_version == "31 December 2025" else None
+    doc_id = _document_id(path)
+
+    chunks: list[PolicyChunk] = []
+    current_part_id: str | None = None
+    current_part_title: str | None = None
+    current_section_id: str | None = None
+    current_section_title: str | None = None
+    seen_clause_ids: set[str] = set()
 
     i = 0
     while i < len(lines):
-        line = lines[i]
-        stripped = line.strip()
-
-        # Check for Part heading
-        part_match = part_pattern.match(stripped)
+        stripped = lines[i].strip()
+        part_match = PART_RE.match(stripped)
         if part_match:
-            current_part = f"Part {part_match.group(1)} — {part_match.group(2)}"
+            current_part_id = part_match.group(1)
+            current_part_title = part_match.group(2).strip()
+            current_section_id = None
+            current_section_title = None
             i += 1
             continue
 
-        # Check for Section heading
-        section_match = section_pattern.match(stripped)
+        section_match = SECTION_RE.match(stripped)
         if section_match:
-            current_section = f"{section_match.group(1)} {section_match.group(2)}"
+            current_section_id = section_match.group(1)
+            current_section_title = section_match.group(2).strip()
             i += 1
             continue
 
-        # Check for Clause start
-        clause_match = clause_pattern.match(stripped)
-        if clause_match:
-            clause_id = clause_match.group(1)
-            clause_title = clause_match.group(2)  # May be None
-            clause_text_start = clause_match.group(3)
-
-            # Build the clause text
-            text_parts = []
-            if clause_title:
-                text_parts.append(f"{clause_title.strip()} — {clause_text_start}" if clause_text_start else clause_title.strip())
-            elif clause_text_start:
-                text_parts.append(clause_text_start)
-
-            line_start = i + 1  # 1-indexed
-            sub_items = []
-
-            # Consume continuation lines, sub-items, and tables
+        clause_match = CLAUSE_RE.match(stripped)
+        if not clause_match:
             i += 1
-            while i < len(lines):
-                next_line = lines[i].strip()
-
-                # Handle blank lines: peek ahead to see if content continues
-                if not next_line:
-                    # Look ahead past blank lines
-                    peek = i + 1
-                    while peek < len(lines) and not lines[peek].strip():
-                        peek += 1
-                    
-                    if peek >= len(lines):
-                        i = peek
-                        break
-                    
-                    peek_line = lines[peek].strip()
-                    
-                    # If the next non-blank line is a sub-item, continue
-                    if sub_item_pattern.match(peek_line):
-                        i += 1
-                        continue
-                    # If next non-blank is a table row, continue
-                    if table_pattern.match(peek_line):
-                        i += 1
-                        continue
-                    # Otherwise, this blank line ends the clause
-                    i += 1
-                    break
-
-                # Stop at new Part, Section, or Clause
-                if part_pattern.match(next_line):
-                    break
-                if section_pattern.match(next_line):
-                    break
-                if clause_pattern.match(next_line):
-                    break
-                # Stop at horizontal rules
-                if next_line == "---":
-                    break
-
-                # Sub-items
-                sub_match = sub_item_pattern.match(next_line)
-                if sub_match:
-                    sub_items.append(f"({sub_match.group(1)}) {sub_match.group(2)}")
-                    i += 1
-                    continue
-
-                # Table rows (include in text)
-                if table_pattern.match(next_line):
-                    text_parts.append(next_line)
-                    i += 1
-                    continue
-
-                # Regular continuation text
-                text_parts.append(next_line)
-                i += 1
-
-            line_end = i  # 1-indexed (approximately)
-
-            full_text = " ".join(text_parts) if not any(table_pattern.match(p) for p in text_parts) else "\n".join(text_parts)
-
-            # Clean up the text
-            full_text = re.sub(r"\s+", " ", full_text).strip() if "\n" not in full_text else full_text.strip()
-
-            if full_text or sub_items:
-                clause = PolicyClause(
-                    clause_id=clause_id,
-                    text=full_text,
-                    part=current_part,
-                    section=current_section,
-                    line_start=line_start,
-                    line_end=line_end,
-                    sub_items=sub_items,
-                )
-                clauses.append(clause)
             continue
 
-        i += 1
+        if not current_part_id or not current_section_id:
+            raise CorpusParseError(f"Clause on line {i + 1} has no Part/section context")
 
-    return clauses
+        clause_id = clause_match.group(1)
+        if clause_id in seen_clause_ids:
+            raise CorpusParseError(f"Duplicate official clause ID §{clause_id}")
+        seen_clause_ids.add(clause_id)
+
+        start_idx = i
+        j = i + 1
+        while j < len(lines):
+            candidate = lines[j].strip()
+            if (
+                PART_RE.match(candidate)
+                or SECTION_RE.match(candidate)
+                or CLAUSE_RE.match(candidate)
+                or candidate == "---"
+            ):
+                break
+            j += 1
+
+        content_end = j
+        while content_end > start_idx + 1 and not lines[content_end - 1].strip():
+            content_end -= 1
+
+        first_title = (clause_match.group(2) or "").strip()
+        first_remainder = (clause_match.group(3) or "").strip()
+        first_content = " ".join(part for part in (first_title, first_remainder) if part)
+        content_lines = [first_content] + [line.rstrip("\r\n") for line in lines[start_idx + 1 : content_end]]
+        while content_lines and not content_lines[-1].strip():
+            content_lines.pop()
+        raw_text = "\n".join(content_lines).strip()
+        source_text = "".join(lines[start_idx:content_end]).rstrip("\r\n")
+
+        start_offset = byte_offsets[start_idx]
+        end_offset = start_offset + len(source_text.encode("utf-8"))
+        source_digest = hashlib.sha256(source_text.encode("utf-8")).hexdigest()
+        chunk_id = "chunk_" + hashlib.sha256(
+            f"{doc_id}|{document_version}|{clause_id}|{source_digest}".encode("utf-8")
+        ).hexdigest()[:16]
+        display_text = _display_text(raw_text)
+
+        chunks.append(
+            PolicyChunk(
+                chunk_id=chunk_id,
+                document_id=doc_id,
+                document_name=path.name,
+                document_version=document_version,
+                effective_date=effective_date,
+                text=display_text,
+                raw_text=raw_text,
+                normalized_text=_normalized(raw_text),
+                source_text=source_text,
+                part_id=current_part_id,
+                part_title=current_part_title,
+                section_id=current_section_id,
+                section_title=current_section_title,
+                clause_id=clause_id,
+                page=None,
+                line_start=start_idx + 1,
+                line_end=content_end,
+                start_offset=start_offset,
+                end_offset=end_offset,
+                source_order=len(chunks),
+                cross_references=sorted(set(CROSS_REF_RE.findall(raw_text))),
+            )
+        )
+        i = j
+
+    if not chunks:
+        raise CorpusParseError(
+            "No official clauses were detected. Expected Markdown provisions such as "
+            "'**4.3.2** Policy text'."
+        )
+    return chunks
 
 
-def get_embedding_text(clause: PolicyClause) -> str:
-    """
-    Create the text representation used for embedding.
-    
-    Includes the section context so the embedding captures 
-    the semantic meaning within the policy hierarchy.
-    """
-    parts = []
-    parts.append(f"§{clause.clause_id}")
-    parts.append(f"{clause.part}")
-    parts.append(f"Section: {clause.section}")
-    parts.append(clause.text)
-    if clause.sub_items:
-        parts.extend(clause.sub_items)
-    return " | ".join(parts)
+def build_corpus_report(filepath: str | Path, chunks: list[PolicyChunk]) -> IngestionReport:
+    """Create reproducible corpus diagnostics without changing source truth."""
+
+    path = Path(filepath).expanduser().resolve()
+    raw = path.read_bytes()
+    by_text: dict[str, list[str]] = defaultdict(list)
+    for chunk in chunks:
+        by_text[chunk.normalized_text].append(chunk.clause_id or chunk.chunk_id)
+    duplicate_groups = [ids for ids in by_text.values() if len(ids) > 1]
+
+    clause_ids = {chunk.clause_id for chunk in chunks if chunk.clause_id}
+    section_ids = {chunk.section_id for chunk in chunks if chunk.section_id}
+    unresolved: set[str] = set()
+    for chunk in chunks:
+        for ref in chunk.cross_references:
+            if ref not in clause_ids and ref not in section_ids:
+                unresolved.add(ref)
+
+    lengths = [len(chunk.text) for chunk in chunks]
+    return IngestionReport(
+        document_id=chunks[0].document_id,
+        document_name=path.name,
+        document_version=chunks[0].document_version,
+        source_sha256=hashlib.sha256(raw).hexdigest(),
+        source_bytes=len(raw),
+        source_lines=len(raw.decode("utf-8").splitlines()),
+        pages=None,
+        parts=len({chunk.part_id for chunk in chunks}),
+        sections=len(section_ids),
+        clauses=len({chunk.clause_id for chunk in chunks}),
+        chunks=len(chunks),
+        average_chunk_characters=round(sum(lengths) / len(lengths), 2),
+        largest_chunk_characters=max(lengths),
+        duplicate_clause_groups=sorted(duplicate_groups),
+        unresolved_cross_references=sorted(unresolved),
+    )
 
 
-def format_clause_for_context(clause: PolicyClause) -> str:
-    """Format a clause for inclusion in the LLM context window."""
-    lines = [f"[§{clause.clause_id} | {clause.section} | lines {clause.line_start}-{clause.line_end}]"]
-    lines.append(clause.text)
-    if clause.sub_items:
-        for item in clause.sub_items:
-            lines.append(f"  {item}")
-    return "\n".join(lines)
+def persist_chunks(
+    chunks: list[PolicyChunk],
+    report: IngestionReport,
+    chunks_path: str | Path,
+    report_path: str | Path,
+) -> None:
+    """Persist trusted chunk metadata and corpus diagnostics as UTF-8 JSON."""
+
+    chunks_target = Path(chunks_path)
+    report_target = Path(report_path)
+    chunks_target.parent.mkdir(parents=True, exist_ok=True)
+    report_target.parent.mkdir(parents=True, exist_ok=True)
+    chunks_target.write_text(
+        json.dumps([chunk.model_dump(mode="json") for chunk in chunks], indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    report_target.write_text(
+        report.model_dump_json(indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def load_chunks(path: str | Path) -> list[PolicyChunk]:
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    return [PolicyChunk.model_validate(item) for item in payload]
+
+
+def get_embedding_text(chunk: PolicyChunk) -> str:
+    """Retrieval representation with official hierarchy as context."""
+
+    hierarchy = " | ".join(
+        part
+        for part in (
+            f"Part {chunk.part_id}: {chunk.part_title}" if chunk.part_id else None,
+            f"Section {chunk.section_id}: {chunk.section_title}" if chunk.section_id else None,
+            f"Clause {chunk.clause_id}" if chunk.clause_id else None,
+        )
+        if part
+    )
+    return f"{hierarchy} | {chunk.normalized_text}"
+
+
+def format_clause_for_context(chunk: PolicyChunk) -> str:
+    """Delimit corpus text as untrusted data with an opaque trusted ID."""
+
+    page = str(chunk.page) if chunk.page is not None else "not available"
+    return (
+        "<POLICY_EXCERPT>\n"
+        f"SOURCE_ID: {chunk.chunk_id}\n"
+        f"CLAUSE: {chunk.clause_id or 'internal'}\n"
+        f"SECTION: {chunk.section_id or 'unknown'} {chunk.section_title or ''}\n"
+        f"PAGE: {page}\n"
+        f"LINES: {chunk.line_start}-{chunk.line_end}\n"
+        f"TEXT:\n{chunk.text}\n"
+        "</POLICY_EXCERPT>"
+    )
+
+
+def find_chunks(chunks: Iterable[PolicyChunk], source_id: str) -> list[PolicyChunk]:
+    """Resolve an opaque chunk ID, official clause ID, or section ID."""
+
+    cleaned = source_id.strip().removeprefix("§")
+    return [
+        chunk
+        for chunk in chunks
+        if chunk.chunk_id == cleaned
+        or chunk.clause_id == cleaned
+        or chunk.section_id == cleaned
+    ]
+
+
+# Compatibility name retained for external imports from the original prototype.
+PolicyClause = PolicyChunk
 
 
 if __name__ == "__main__":
-    # Quick test: parse the manual and print stats
-    manual_path = Path(__file__).parent.parent / "data" / "policy-manual.md"
-    clauses = parse_policy_manual(manual_path)
-
-    print(f"Parsed {len(clauses)} clauses from the policy manual.\n")
-
-    # Show structure
-    current_part = ""
-    for c in clauses:
-        if c.part != current_part:
-            current_part = c.part
-            print(f"\n{current_part}")
-        print(f"  §{c.clause_id} — {c.section} ({len(c.text)} chars, {len(c.sub_items)} sub-items)")
-
-    # Show a sample clause
-    print("\n--- Sample clause (§4.3.2) ---")
-    for c in clauses:
-        if c.clause_id == "4.3.2":
-            print(format_clause_for_context(c))
-            break
-
-    print("\n--- Sample clause (§9.1.4) ---")
-    for c in clauses:
-        if c.clause_id == "9.1.4":
-            print(format_clause_for_context(c))
-            break
+    default = Path(__file__).resolve().parent.parent / "data" / "policy-manual.md"
+    parsed = parse_policy_manual(default)
+    print(build_corpus_report(default, parsed).model_dump_json(indent=2))
