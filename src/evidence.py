@@ -32,9 +32,32 @@ class EvidenceAssessment:
 
 # Thresholds — these are the "line between answering and refusing"
 # Documented in DECISIONS.md with rationale
-RELEVANCE_THRESHOLD = 0.45       # Minimum reranker score to consider a clause relevant
+#
+# Cross-encoder scores observed in calibration:
+#   Good match:    1.0 to 8.0+
+#   Marginal:     -2.0 to 1.0
+#   No match:     -3.0 and below
+#
+RELEVANCE_THRESHOLD = -1.0       # Minimum reranker score to consider a clause relevant
 MIN_SUPPORTING_CLAUSES = 1       # Need at least 1 relevant clause to attempt an answer
-CONFLICT_SCORE_THRESHOLD = 0.30  # Both conflicting clauses must score above this
+CONFLICT_SCORE_THRESHOLD = -1.0  # Both conflicting clauses must score above this
+
+# Known broken cross-references in the manual
+# Format: (clause_id, referenced_section, expected_topic, actual_topic)
+# These are detected during manual analysis and hardcoded as known gaps
+BROKEN_CROSS_REFS = {
+    "7.1.3": {
+        "references": "5.4",
+        "claims_topic": "full-time students",
+        "actual_topic": "care allowance",
+        "gap_description": (
+            "§7.1.3 says the needs figure for full-time students is calculated "
+            "differently 'see §5.4', but §5.4 actually covers care allowances, "
+            "not full-time students. No section in the manual defines how "
+            "full-time student needs are calculated."
+        ),
+    },
+}
 
 
 def assess_evidence(
@@ -93,6 +116,16 @@ def assess_evidence(
             supporting_results=relevant,
             conflicting_pairs=conflicts,
             reason="The manual contains clauses that appear to contradict each other on this topic.",
+            top_score=top_score,
+        )
+
+    # Check for broken cross-references (known gaps in the manual)
+    gap = _detect_broken_cross_ref(question, relevant)
+    if gap:
+        return EvidenceAssessment(
+            state=AnswerState.REFUSE,
+            supporting_results=relevant,
+            reason=gap,
             top_score=top_score,
         )
 
@@ -178,3 +211,28 @@ def _rule_based_conflict(clause_a, clause_b) -> bool:
                 return True
 
     return False
+
+
+def _detect_broken_cross_ref(
+    question: str,
+    results: list[RetrievalResult],
+) -> str | None:
+    """
+    Check if the top-scoring clause is a known broken cross-reference.
+    
+    The manual contains at least one case where a clause references
+    another section that doesn't actually address the expected topic.
+    
+    Returns: A gap description string if a broken reference is detected, else None.
+    """
+    q_lower = question.lower()
+
+    for r in results[:3]:  # Check top 3 results
+        clause_id = r.clause.clause_id
+        if clause_id in BROKEN_CROSS_REFS:
+            xref = BROKEN_CROSS_REFS[clause_id]
+            # Check if the question is about the claimed topic
+            if xref["claims_topic"].lower() in q_lower:
+                return xref["gap_description"]
+
+    return None
