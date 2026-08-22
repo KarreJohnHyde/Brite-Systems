@@ -24,7 +24,8 @@ source text; normalized retrieval text; UTF-8 byte offsets; source line
 numbers; cross-references; version metadata; source order; and a SHA-256 digest.
 Because the supplied source is Markdown rather than a paginated document, page
 numbers are unavailable and citations use official clause IDs plus source-line
-ranges.
+ranges. Repository attributes force source files to LF on every operating
+system so the digest, byte offsets, and deterministic opaque IDs remain stable.
 
 Human-reviewed candidate gaps and contradictions are recorded separately in
 `data/policy_findings.json`. They guide conservative retrieval and decision

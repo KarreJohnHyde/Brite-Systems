@@ -1,0 +1,10 @@
+# Keep source-derived byte offsets, corpus hashes, and chunk IDs stable on every OS.
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.txt text eol=lf
+*.example text eol=lf
+
+# Generated binary artifacts must never receive line-ending conversion.
+*.faiss binary
+*.docx binary
