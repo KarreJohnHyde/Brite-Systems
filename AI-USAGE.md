@@ -1,22 +1,104 @@
 # AI Usage Disclosure
 
-In accordance with the hackathon policy, this document outlines how AI tools were used in the development of **The Grounded Answer** project.
+AI-assisted development was used extensively on The Grounded Answer. This file
+describes that assistance and separates machine-generated implementation work
+from decisions that require accountable human judgment.
 
-## 1. Code Generation
-An autonomous AI coding agent (Google Antigravity) was used extensively to generate the foundational boilerplate and core logic for the repository. The agent was responsible for:
-- Writing the `ClauseParser` logic to correctly chunk Markdown documents by section and clause.
-- Setting up the FAISS vector store and `sentence-transformers` embedding pipelines.
-- Implementing the three-state evidence engine (`evidence.py`) based on human-provided rules.
-- Scaffolding the `Streamlit` user interface and CLI commands (`main.py`).
+## Tools used
 
-## 2. Architecture Assistance
-The RAG architecture, explicitly the decision to separate the retrieval layer from the evidence analysis layer (refusal mechanism), was co-designed with the AI. The human developer provided the strict product constraints (refusal requirements, contradiction handling, no hallucinations), and the AI proposed the modular `src/` directory structure to accommodate these requirements cleanly.
+- **Google Antigravity coding agent** was used for the initial project scaffold,
+  parser, retrieval prototype, evidence logic, CLI, and Streamlit prototype.
+- **OpenAI Codex** was used for repository and corpus inspection, architecture
+  review, implementation and refactoring assistance, debugging, test and
+  evaluation-case suggestions, prompt development, security review, and
+  documentation drafting.
 
-## 3. Evaluation & Testing
-The AI was used to parse the initial policy manual and extract edge cases to construct the 10-question evaluation suite (`evaluation/questions.json`). The AI drafted the evaluation logic that grades the system's responses against expected decisions and expected citations.
+Git history retains the staged implementation work. It was not rewritten to
+simulate a development process.
 
-## 4. Human Oversight
-While the AI wrote the majority of the code, human oversight was applied to ensure the system strictly adhered to the public policy constraints:
-- The `RELEVANCE_THRESHOLD` for the Cross-Encoder was manually evaluated and tweaked to `-1.0` to balance precision and refusal safety.
-- The `EvidenceLayer` logic was repeatedly tested by the human to ensure it correctly trapped contradictions without the LLM silently resolving them.
-- Final code review and architectural validation were performed manually.
+## How AI assisted
+
+### Architecture brainstorming
+
+AI helped translate the challenge into explicit components for parsing,
+retrieval, evidence assessment, conflict detection, decision logic, answer
+construction, provider access, citation validation, and presentation. It also
+suggested the three-state `ANSWER` / `CONFLICT` / `REFUSE` contract and the
+source-first execution order.
+
+### Code generation and refactoring
+
+AI drafted and revised Python modules, Pydantic schemas, configuration loading,
+the CLI, the optional Streamlit interface, deterministic retrieval/generation,
+the optional Gemini provider, and citation safeguards. Generated code was
+inspected in the repository rather than accepted solely from prose output.
+
+### Corpus analysis and test suggestions
+
+AI searched the supplied manual for clause structure, cross-references, numeric
+differences, apparent gaps, and possible conflicts. It proposed evaluation and
+unit-test cases grounded in the actual corpus. Reviewed findings are stored in
+`data/policy_findings.json`; they are metadata and do not alter the source
+manual.
+
+### Debugging and verification
+
+AI ran local commands, read tracebacks and evaluation output, identified failure
+categories, and proposed repairs in the responsible pipeline stages. Examples
+include clean-clone checks, dependency/runtime checks, retrieval misses, refusal
+boundary errors, missed conflicts, citation-contract failures, and stale UI or
+provider integrations.
+
+### Documentation drafting
+
+AI drafted the clean-clone instructions, architecture explanation, ADRs,
+privacy/security notes, known limitations, command examples, and this disclosure.
+Documentation claims still need to agree with executed commands and recorded
+evaluation artifacts before release.
+
+### Prompt development
+
+AI helped draft the optional provider prompt that limits the model to supplied
+policy excerpts, treats source text as untrusted data, requires structured
+output, and restricts source selection to opaque IDs supplied by the program.
+
+## Human judgment and responsibility
+
+The following are not delegated to a language model and require human review:
+
+- deciding whether the source manual is authentic and the correct version;
+- approving the final architecture and release scope;
+- interpreting whether two provisions are truly contradictory or merely scoped
+  differently;
+- confirming that a claimed corpus gap is genuine;
+- assigning expected decisions and source clauses to evaluation cases;
+- choosing the refusal and direct-coverage thresholds after inspecting false
+  answers, false refusals, and missed conflicts;
+- deciding which escalation roles are supported by the manual;
+- assessing privacy, security, legal, and operational suitability; and
+- accepting residual failure modes and the final measured evaluation result.
+
+AI-generated labels and findings are hypotheses until reviewed against the
+manual. The checked-in `source_verified` markers mean that the cited wording was
+rechecked against this supplied corpus; they do not imply independent human,
+legal, or operational approval.
+
+## Safeguards against AI-authored policy
+
+- The checked-in challenge manual is the source of truth; AI did not rewrite it.
+- The system does not use AI to invent official clause IDs, page numbers,
+  deadlines, amounts, contact details, exceptions, or precedence rules.
+- LLM generation is optional and downstream of the deterministic decision.
+- Provider-selected source IDs are allowlisted against retrieved chunks and
+  mapped back to trusted ingestion metadata in code.
+- Unsupported provider output fails closed to `REFUSE`.
+- Evaluation failures are retained and must not be relabeled merely to improve a
+  score.
+
+## Limitations of AI assistance
+
+AI review can miss bugs, misread policy scope, overfit rules to known questions,
+or produce plausible but incorrect documentation. Passing generated tests does
+not prove policy correctness. Final claims should therefore be based on the
+checked-in source, source-verified labels, executed tests, and the generated
+evaluation report—not on an AI statement that the project “should work.”

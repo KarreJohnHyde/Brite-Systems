@@ -1,155 +1,448 @@
 # The Grounded Answer
 
-Citation-Aware RAG Assistant for Government Policy Manuals
+The Grounded Answer is a policy-grounded decision-support assistant for the
+Calder County Household Support Program manual. It retrieves exact policy
+clauses, assesses whether those clauses actually settle a question, and emits
+one of three explicit decisions: `ANSWER`, `CONFLICT`, or `REFUSE`.
 
-A three-state evidence engine that answers questions from the Calder County Household Support Program policy manual. Every answer is grounded in specific policy clauses, contradictions are surfaced rather than hidden, and the system refuses to answer when the manual doesn't cover the question.
+This is not a generic chatbot and it is not an autonomous eligibility
+decision-maker. Retrieval relevance alone never authorizes an answer. A
+transparent refusal is the intended result when the manual is silent,
+incomplete, ambiguous, or dependent on missing case facts.
 
-## Quick Start
+## Corpus and provenance
 
-### Prerequisites
+The supplied challenge corpus is checked in at
+`data/policy-manual.md`. Its own header identifies it as the **Calder County
+Household Support Program Policy Manual**, consolidated as at **31 December
+2025**, and states that its persons, places, figures, and case references are
+fictitious. The repository does not fetch a replacement manual or silently
+repair its content.
 
-- Python 3.10+
-- A Gemini API key (free tier: [aistudio.google.com](https://aistudio.google.com))
+Ingestion preserves the official part, section, and clause hierarchy; exact
+source text; normalized retrieval text; UTF-8 byte offsets; source line
+numbers; cross-references; version metadata; source order; and a SHA-256 digest.
+Because the supplied source is Markdown rather than a paginated document, page
+numbers are unavailable and citations use official clause IDs plus source-line
+ranges.
 
-### Setup
+Human-reviewed candidate gaps and contradictions are recorded separately in
+`data/policy_findings.json`. They guide conservative retrieval and decision
+checks without changing source truth.
 
-```bash
-# Clone the repository
-git clone <repo-url>
-cd grounded-answer
+## Decision contract
 
-# Create a virtual environment (recommended)
-python -m venv venv
-venv\Scripts\activate        # Windows
-# source venv/bin/activate   # Linux/Mac
+| Decision | When it is used | What is returned |
+| --- | --- | --- |
+| `ANSWER` | Direct, complete, internally consistent evidence clears the configured support boundary | Plain answer, trusted clause citations, exact excerpts, and evidence level |
+| `CONFLICT` | Materially incompatible relevant provisions have no source-backed precedence rule | Both sides, both citations, why no single rule can be chosen, and an escalation step |
+| `REFUSE` | Evidence is absent, related-only, partial, below threshold, dependent on missing case facts, affected by a known gap, or fails provider/citation validation | Explicit “I don't know based on the current policy manual,” the reason, and a non-fabricated next step |
 
-# Install dependencies
-pip install -r requirements.txt
-
-# Set your Gemini API key
-set GEMINI_API_KEY=your-key-here          # Windows CMD
-$env:GEMINI_API_KEY="your-key-here"       # Windows PowerShell
-# export GEMINI_API_KEY=your-key-here     # Linux/Mac
-```
-
-### Build the Index
-
-```bash
-python main.py ingest
-```
-
-This parses the policy manual into 148 clause-level chunks, generates embeddings, and builds a FAISS index. Takes ~5 seconds.
-
-### Web UI (Streamlit)
-
-```bash
-streamlit run app.py
-```
-
-This will start a local web server and open an interactive chat interface in your browser.
-
-### Ask a Question (CLI)
-
-```bash
-python main.py ask "What is the resource limit for household eligibility?"
-```
-
-### Interactive Mode
-
-```bash
-python main.py interactive
-```
-
-### View a Specific Clause
-
-```bash
-python main.py show-clause 4.3.2
-```
-
-### Run the Evaluation Suite
-
-```bash
-python main.py evaluate
-```
+`ANSWER` requires at least one trusted citation. `CONFLICT` requires at least
+two. An LLM cannot change the decision already made by the deterministic
+decision engine, and it can select only opaque source IDs supplied to it.
 
 ## Architecture
 
 ```text
-User Question
-      │
-      ▼
-Sentence-Transformer Embedding
-      │
-      ▼
-FAISS Top-15 → Cross-Encoder Rerank → Top-5
-      │
-      ▼
-Evidence Assessment
-      │
-      ├── High confidence, consistent → ANSWER (grounded + cited)
-      ├── High confidence, conflict   → CONFLICT (surface both clauses)
-      └── Low confidence / no match   → REFUSE (say "I don't know" + who to ask)
+supplied Markdown corpus
+        │
+        ▼
+clause-aware parser ──► exact chunks + corpus report + SHA-256
+        │
+        ▼
+dense index + lexical BM25
+        │
+question ──► hybrid retrieval ──► optional local reranker
+                                      │
+                                      ▼
+                              evidence assessment
+                                      │
+                                      ▼
+                         contradiction / gap checks
+                                      │
+                                      ▼
+                     ANSWER │ CONFLICT │ REFUSE
+                                      │
+                                      ▼
+                    deterministic answer builder
+                       or optional Gemini phrasing
+                                      │
+                                      ▼
+                         citation and claim validation
 ```
 
-### Three Output States
+The default path uses stable local hashing embeddings, lexical retrieval,
+deterministic answer construction, and no credentials. Sentence Transformers,
+CrossEncoder reranking, and Gemini phrasing are opt-in runtime modes.
 
-| State | When | What the user sees |
-| :-- | :-- | :-- |
-| **ANSWER** | Relevant clauses found, no conflict | Plain-language answer with §X.Y.Z citations |
-| **CONFLICT** | Retrieved clauses contradict each other | Both clauses shown, escalation recommended |
-| **REFUSE** | No relevant clauses or topic not covered | "I don't know" + contact information |
+## Prerequisites
 
-### Technology Stack
+- CPython 3.11 or newer
+- Git
+- Internet access for the initial dependency installation
+- Additional network access only when downloading optional Hugging Face models
+  or calling Gemini
 
-| Component | Technology |
-| :-- | :-- |
-| Embeddings | sentence-transformers/all-MiniLM-L6-v2 |
-| Vector DB | FAISS (IndexFlatIP, cosine similarity) |
-| Reranker | cross-encoder/ms-marco-MiniLM-L-6-v2 |
-| LLM | Google Gemini 2.0 Flash |
-| Language | Python 3.14 |
+Run all commands from the repository root. The generated index records its
+embedding backend and source digest; asking with a different backend or a
+changed corpus fails safely until the corpus is re-ingested.
 
-## Project Structure
+## Clean-clone setup
+
+Clone the repository to the directory name used by the commands below:
+
+```powershell
+git clone https://github.com/KarreJohnHyde/Brite-Systems.git grounded-answer
+cd grounded-answer
+```
+
+### Windows PowerShell
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+If local policy blocks script activation, allow it only for the current shell
+and rerun the activation command:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+### macOS or Linux
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+cp .env.example .env
+```
+
+The checked-in `.env.example` already selects the safe deterministic defaults.
+Do not add credentials unless you intentionally enable an external provider.
+
+## Ingest the corpus
+
+Inspect the source structure without creating an index:
+
+```powershell
+python main.py corpus-report
+```
+
+Build the default deterministic hashing index:
+
+```powershell
+python main.py ingest --embedding-backend hashing
+```
+
+Ingestion writes generated chunks and diagnostics under `data/processed/` and
+the FAISS index under `data/indexes/`. Both directories are ignored because
+they are reproducible from the checked-in corpus.
+
+To inspect or ingest a different supplied Markdown file without overwriting the
+checked-in manual, pass its path explicitly:
+
+```powershell
+python main.py corpus-report --corpus "C:\path\to\policy-manual.md"
+python main.py ingest --corpus "C:\path\to\policy-manual.md" --embedding-backend hashing
+```
+
+For a continuing alternate-corpus workflow, set `CORPUS_PATH` to that same file
+in `.env` so every command validates against the indexed source. Create and
+human-review a corresponding source-derived evaluation set before using the
+checked-in evaluator or calibrator with another corpus. The parser expects the
+actual manual's `Part`, section, and numbered-clause structure and fails with a
+clear error when that structure is not present.
+
+## CLI usage
+
+Ask one question using the safe default:
+
+```powershell
+python main.py ask "What is the household resource limit?"
+```
+
+Inspect the complete decision trace or validated JSON:
+
+```powershell
+python main.py ask "What is the household resource limit?" --debug
+python main.py ask "What is the household resource limit?" --json
+```
+
+Look up exact source text by official clause ID, section ID, or opaque chunk ID:
+
+```powershell
+python main.py source 2.4.1
+python main.py source 4.3
+python main.py source 2.4.1 --json
+```
+
+`show-clause` remains an alias for `source`:
+
+```powershell
+python main.py show-clause 2.4.1
+```
+
+Start independent-question interactive mode:
+
+```powershell
+python main.py interactive --embedding-backend hashing
+```
+
+The interactive and Streamlit histories are display conveniences. Each question
+is evaluated independently; prior messages do not become policy evidence.
+
+## Evaluation, calibration, and tests
+
+Run the source-derived evaluation set. The command returns a non-zero process
+status when one or more cases fail:
+
+```powershell
+python main.py evaluate --embedding-backend hashing
+python main.py evaluate --embedding-backend hashing --quiet
+```
+
+Sweep evidence thresholds against the labeled evaluation set:
+
+```powershell
+python main.py calibrate --embedding-backend hashing
+```
+
+Calibration is evidence for a threshold choice, not permission to hide
+failures. Review both false answers and false refusals, then record any adopted
+threshold change in `DECISIONS.md` and `.env`.
+
+Run the automated tests:
+
+```powershell
+python -m pytest -q
+```
+
+The generated evaluation report is the authoritative record of measured
+results. Do not infer release readiness solely from an aggregate score; inspect
+every false answer, missed conflict, bad citation, and false refusal.
+
+The checked-in deterministic baseline was executed on 23 August 2026. It passed
+18 / 18 strict source-derived cases with 100% decision accuracy, retrieval
+recall, required-citation recall, and unsupported-claim safety on this
+development set. The calibration sweep evaluated 28 threshold combinations and
+retained `REFUSAL_THRESHOLD=0.58` and `DIRECT_COVERAGE_THRESHOLD=0.34`, with
+zero false answers and zero missed conflicts for the recommended candidate.
+The automated suite passed 74 tests. These are development-set measurements,
+not generalization guarantees; see
+[`evaluation/results/evaluation.md`](evaluation/results/evaluation.md) and
+[`evaluation/results/calibration.md`](evaluation/results/calibration.md) for the
+complete case-level evidence.
+
+## Short judging demo
+
+```powershell
+python main.py ingest --embedding-backend hashing
+python main.py ask "What is the household resource limit?"
+python main.py ask "How is the needs figure calculated for a full-time student?"
+python main.py ask "How many days does a recipient have to report a change of circumstances?"
+python main.py source 4.3.2
+python main.py source 9.1.4
+python main.py evaluate --embedding-backend hashing --quiet
+python -m pytest -q
+```
+
+These questions exercise the intended supported, policy-gap, and contradiction
+paths. Example output shape is:
+
+```text
+STATUS: ANSWER | CONFLICT | REFUSE
+
+plain-language result
+
+WHY
+decision reason
+
+NEXT STEP
+source-backed escalation guidance, when needed
+
+SOURCES
+official clause, source lines, and exact excerpt
+
+Evidence: HIGH | MEDIUM | LOW
+```
+
+## Optional local semantic embeddings and reranking
+
+Install the optional local-model dependencies first:
+
+```powershell
+python -m pip install -r requirements-ml.txt
+```
+
+Edit `.env`:
+
+```dotenv
+EMBEDDING_BACKEND=sentence-transformers
+ENABLE_RERANKING=true
+```
+
+Then rebuild and query with the matching backend:
+
+```powershell
+python main.py ingest --embedding-backend sentence-transformers
+python main.py ask "What is the household resource limit?" --embedding-backend sentence-transformers
+python main.py evaluate --embedding-backend sentence-transformers
+```
+
+The first run downloads `sentence-transformers/all-MiniLM-L6-v2` and, when
+reranking is enabled, `cross-encoder/ms-marco-MiniLM-L-6-v2`. These models run
+locally after download. If the reranker cannot load, retrieval continues without
+it; reranking is never required for the safe baseline.
+
+## Optional Gemini phrasing
+
+The deterministic decision, evidence, and citation checks remain authoritative.
+Gemini is used only to phrase an already-supported answer and cannot convert a
+trusted `REFUSE` or `CONFLICT` decision into `ANSWER`.
+
+Install the optional provider dependency:
+
+```powershell
+python -m pip install -r requirements-llm.txt
+```
+
+Then set these values in the untracked `.env` file:
+
+```dotenv
+LLM_PROVIDER=gemini
+GEMINI_MODEL=gemini-3.6-flash
+GEMINI_API_KEY=
+```
+
+Set `GEMINI_API_KEY` to your own credential in the untracked file, then run:
+
+```powershell
+python main.py ask "What is the household resource limit?" --provider gemini
+```
+
+Provider errors, malformed output, unsupported claims, and invalid source IDs
+are converted to `REFUSE`; an unvalidated answer is not shown.
+
+## Streamlit interface
+
+After ingestion:
+
+```powershell
+python -m pip install -r requirements-ui.txt
+python -m streamlit run app.py
+```
+
+The sidebar selects the embedding backend and answer provider. Its backend must
+match the index built by `ingest`. Restart Streamlit after editing `.env`. The
+CLI is the canonical interface for evaluation and reproducibility.
+
+## Privacy and security
+
+- Default deterministic mode keeps questions and excerpts local and makes no
+  model API call.
+- Gemini mode sends the question and only the selected policy excerpts with
+  opaque source IDs to the configured Gemini API. Do not use it for sensitive
+  case data without an approved privacy review.
+- Policy excerpts are treated as untrusted data, not executable instructions.
+- The model may select only source IDs already supplied by the program. Trusted
+  clause metadata is mapped back in code and invented IDs are rejected.
+- Claim validation rejects obvious invented clause IDs and unsupported numeric
+  values before rendering.
+- `.env` and Streamlit secrets are ignored. Never commit API keys.
+- Debug traces contain the question, retrieved excerpts, scores, and decision
+  rationale. Treat exported traces as potentially sensitive.
+- Index loading verifies schema, chunk count, dimensions, artifact checksums,
+  embedding backend, model identity where applicable, the current corpus
+  SHA-256, and every citation field against a fresh parse of the source.
+
+## Known corpus conflicts and gaps
+
+The source intentionally contains issues that must remain visible:
+
+- **Reporting deadline conflict:** §4.3.2 says 10 calendar days, while §9.1.4
+  describes 30 calendar days as required under §4.3.
+- **Sanction-effect conflict:** §4.1.1 describes a person with an unexpired
+  §10.5 sanction as excluded from eligibility, while §10.5.2 defines a sanction
+  as a 20% award reduction for 4 or 8 weeks.
+- **Full-time-student needs gap:** §7.1.3 sends the reader to §5.4, but §5.4
+  concerns care allowance and supplies no student calculation.
+- **Education-absence gap:** §§3.2.3 and 5.2.3 say full-time education is handled
+  separately, but no separate rule appears.
+- **Unlisted-resource gap:** the manual does not classify or value asset types
+  such as cryptocurrency or a second vehicle.
+- **Household-calculation gaps:** the needs table does not resolve some
+  multi-adult compositions, and the housing-assistance adjustment refers to
+  cost components the table does not identify.
+- **No-fixed-address gap:** the residence rules permit no fixed address while
+  the application rule requires an address, without saying what to enter.
+
+The complete reviewed list, scopes, triggers, and clause IDs is in
+`data/policy_findings.json`. The assistant surfaces or refuses on these issues;
+it does not choose which provision should prevail.
+
+## Known limitations
+
+- The parser supports the supplied structured Markdown corpus, not arbitrary
+  PDFs, scans, OCR output, or unrelated policy formats.
+- Markdown has no authoritative pages, so line ranges and exact excerpts are
+  used for verification.
+- Retrieval and evidence scoring are English-language heuristics and can still
+  miss paraphrases, compound questions, exceptions, or scope distinctions.
+- Thresholds are corpus- and backend-specific. Re-run calibration and evaluation
+  after changing a backend, model, corpus, or retrieval setting.
+- Curated findings cover reviewed issues; they do not prove that every gap or
+  contradiction has been discovered.
+- The default deterministic answer is intentionally source-forward rather than
+  highly conversational.
+- Gemini availability, latency, pricing, and output can change independently of
+  this repository. The safe local path does not depend on Gemini.
+- The system has no case database and cannot explain an individual case outcome
+  or make an eligibility determination from missing facts.
+- Version metadata is preserved, but multi-version policy selection and policy
+  diffs are not implemented.
+
+## Project structure
 
 ```text
 grounded-answer/
-├── main.py                    # CLI entry point
-├── requirements.txt           # Python dependencies
-├── README.md                  # This file
-├── DECISIONS.md               # Design decisions and rationale
-├── AI-USAGE.md                # AI usage disclosure
-│
+├── main.py                     CLI and output formatting
+├── app.py                      optional Streamlit interface
+├── config/settings.py          validated environment-backed settings
 ├── data/
-│   ├── policy-manual.md       # The corpus (Calder County HSP manual)
-│   ├── contacts.json          # Contact info for refusal responses
-│   └── faiss_index/           # Generated FAISS index (after ingest)
-│
+│   ├── policy-manual.md        supplied source corpus
+│   ├── policy_findings.json    reviewed conflict/gap metadata
+│   └── contacts.json           source-backed escalation descriptions
 ├── src/
-│   ├── parser.py              # Clause-level Markdown parser
-│   ├── embeddings.py          # Sentence-transformer encoding
-│   ├── vector_store.py        # FAISS index management
-│   ├── retriever.py           # Two-stage retrieval (embedding + reranker)
-│   ├── evidence.py            # Evidence assessment (ANSWER/CONFLICT/REFUSE)
-│   ├── contradiction.py       # Conflict detection and response
-│   ├── refusal.py             # "I don't know" response generation
-│   ├── generator.py           # LLM-powered grounded answer generation
-│   └── citations.py           # Citation extraction and validation
-│
-└── evaluation/
-    ├── questions.json          # 10-question test set
-    ├── evaluate.py             # Automated evaluation runner
-    └── results.md              # Generated evaluation report
+│   ├── parser.py               exact-source clause ingestion
+│   ├── embeddings.py           hashing and Sentence Transformer backends
+│   ├── lexical.py              lexical retrieval
+│   ├── vector_store.py         persisted FAISS index and integrity checks
+│   ├── retriever.py            hybrid retrieval, neighbors, optional reranking
+│   ├── evidence.py             support classification
+│   ├── contradiction.py        curated and deterministic conflict checks
+│   ├── decision_engine.py      ANSWER / CONFLICT / REFUSE state machine
+│   ├── generator.py            deterministic answer builder
+│   ├── citations.py            citation and claim validation
+│   ├── refusal.py              refusal and escalation text
+│   ├── pipeline.py             composition root and fail-safe orchestration
+│   └── llm/                    optional provider interface and Gemini adapter
+├── evaluation/                 labeled questions, runner, calibration, results
+├── tests/                      automated tests
+├── requirements.txt            pinned Python dependencies
+├── requirements-ml.txt         optional local models and reranker
+├── requirements-llm.txt        optional Gemini provider
+├── requirements-ui.txt         optional Streamlit interface
+├── .env.example                safe runtime defaults
+├── DECISIONS.md                architecture and safety decisions
+└── AI-USAGE.md                 AI assistance disclosure
 ```
 
-## Evaluation
-
-The test set includes 10 questions designed to probe the system's failure modes:
-
-- **4 straightforward lookups** (expected: ANSWER with correct clause)
-- **2 contradiction questions** targeting §4.3.2 vs §9.1.4 (expected: CONFLICT)
-- **2 gap questions** — one where the manual appears to cover the topic but doesn't (expected: REFUSE)
-- **2 absent topics** not covered at all (expected: REFUSE)
-
-Run with: `python main.py evaluate`
-
-Results are reported honestly — a test set where everything passes means the questions were too easy.
+See `DECISIONS.md` for the refusal boundary, calibration policy, citation trust
+model, trade-offs, and known failure modes.

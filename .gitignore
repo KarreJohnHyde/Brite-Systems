@@ -1,24 +1,35 @@
-# Python
+# Python bytecode and packaging
 __pycache__/
 *.py[cod]
 *.egg-info/
-dist/
-build/
-*.egg
 .eggs/
-venv/
-.venv/
+build/
+dist/
 
-# FAISS index (generated at ingest time)
+# Virtual environments
+.venv/
+venv/
+
+# Test and coverage output
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Generated ingestion/index artifacts
+data/indexes/
+data/processed/
 data/faiss_index/
 
-# IDE
+# Credentials and local runtime configuration
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# Logs and editor/OS files
+*.log
 .vscode/
 .idea/
-
-# OS
 .DS_Store
 Thumbs.db
-
-# Environment
-.env

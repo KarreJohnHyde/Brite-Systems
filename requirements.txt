@@ -1,21 +1,11 @@
-# The Grounded Answer - Dependencies
-# Core ML
-sentence-transformers>=2.2.0
-# FAISS for vector search
+# Pinned core dependency set for CPython 3.11+.
+# Install with: python -m pip install -r requirements.txt
+
+# Core deterministic pipeline and validated configuration
+numpy==2.4.6
+pydantic==2.13.4
+python-dotenv==1.2.3
 faiss-cpu==1.15.0
 
-# Web UI
-streamlit>=1.41.0
-torch>=2.0.0
-
-# LLM
-google-genai>=1.0.0
-
-# Reranking
-# cross-encoder loaded via sentence-transformers
-
-# Utilities
-numpy>=1.24.0
-
-# Testing
-pytest>=8.0.0
+# Tests
+pytest==9.1.1
