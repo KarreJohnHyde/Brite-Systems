@@ -1,263 +1,294 @@
-"""
-Evaluation suite for The Grounded Answer.
+"""Strict end-to-end evaluation for The Grounded Answer.
 
-Runs the 10-question test set through the full pipeline and reports
-pass/fail results with detailed analysis.
+Each question is sent through ``GroundedAnswerPipeline.ask`` using deterministic
+answer construction. A case passes only when the final decision, retrieval,
+citations, required facts, forbidden-claim checks, grounding checks, and output
+contract all pass. Both JSON and Markdown artifacts retain complete answers and
+auditable traces.
 """
+
+from __future__ import annotations
 
 import json
-import os
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
-from datetime import datetime
-
-# Add project root to path
-ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(ROOT))
+from typing import Any
 
 
-def run_evaluation():
-    """Run all test questions and generate a results report."""
-    from src.embeddings import EmbeddingEngine
-    from src.vector_store import VectorStore
-    from src.retriever import Retriever
-    from src.evidence import assess_evidence, AnswerState
-    from src.refusal import generate_refusal
-    from src.contradiction import generate_contradiction_response
-    from src.generator import AnswerGenerator
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-    # Load test questions
-    questions_path = ROOT / "evaluation" / "questions.json"
-    with open(questions_path, "r", encoding="utf-8") as f:
-        test_questions = json.load(f)
-
-    # Load components
-    index_dir = ROOT / "data" / "faiss_index"
-    if not index_dir.exists():
-        print("Error: Index not found. Run 'python main.py ingest' first.")
-        return
-
-    print("Loading models...", end=" ", flush=True)
-    engine = EmbeddingEngine()
-    store = VectorStore(dimension=engine.dimension)
-    store.load(index_dir)
-    retriever = Retriever(engine, store, use_reranker=True)
-
-    api_key = os.environ.get("GEMINI_API_KEY")
-    generator = AnswerGenerator(api_key=api_key) if api_key else None
-    print("done.\n")
-
-    # Run evaluation
-    print("=" * 70)
-    print("EVALUATION SUITE — The Grounded Answer")
-    print(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"Questions: {len(test_questions)}")
-    print("=" * 70)
-
-    results = []
-    passes = 0
-    failures = 0
-
-    for tq in test_questions:
-        qid = tq["id"]
-        question = tq["question"]
-        expected_state = tq["expected_state"]
-        expected_clauses = tq.get("expected_clauses", [])
-
-        print(f"\n{'─' * 70}")
-        print(f"[{qid}] {question}")
-        print(f"  Expected: state={expected_state}, clauses={expected_clauses}")
-
-        # Run retrieval
-        start = time.time()
-        retrieval_results = retriever.retrieve(question)
-        retrieval_time = time.time() - start
-
-        # Run evidence assessment
-        llm_checker = generator.check_conflict if generator else None
-        assessment = assess_evidence(question, retrieval_results, llm_conflict_checker=llm_checker)
-
-        actual_state = assessment.state.value
-        top_score = assessment.top_score
-
-        # Get retrieved clause IDs
-        retrieved_ids = [r.clause.clause_id for r in retrieval_results]
-        supporting_ids = [r.clause.clause_id for r in assessment.supporting_results]
-
-        # Check state match
-        state_pass = actual_state == expected_state
-
-        # Check clause match (for ANSWER and CONFLICT states)
-        clause_pass = True
-        missing_clauses = []
-        if expected_clauses and expected_state != "refuse":
-            for ec in expected_clauses:
-                if ec not in retrieved_ids and ec not in supporting_ids:
-                    clause_pass = False
-                    missing_clauses.append(ec)
-
-        overall_pass = state_pass and clause_pass
-
-        if overall_pass:
-            passes += 1
-            status = "✅ PASS"
-        else:
-            failures += 1
-            status = "❌ FAIL"
-
-        print(f"  Actual:   state={actual_state}, top_score={top_score:.3f}")
-        print(f"  Retrieved: {retrieved_ids[:5]}")
-        print(f"  Status:   {status}")
-
-        if not state_pass:
-            print(f"  ⚠ State mismatch: expected {expected_state}, got {actual_state}")
-        if missing_clauses:
-            print(f"  ⚠ Missing clauses: {missing_clauses}")
-
-        # Generate the actual response for the report
-        response_text = ""
-        if assessment.state == AnswerState.REFUSE:
-            resp = generate_refusal(question, assessment)
-            response_text = resp["answer"]
-        elif assessment.state == AnswerState.CONFLICT:
-            resp = generate_contradiction_response(question, assessment)
-            response_text = resp["answer"]
-        elif assessment.state == AnswerState.ANSWER and generator:
-            try:
-                resp = generator.generate_answer(question, assessment)
-                response_text = resp["answer"]
-            except Exception as e:
-                response_text = f"(LLM error: {e})"
-        else:
-            response_text = "(No LLM available for answer generation)"
-
-        results.append({
-            "id": qid,
-            "question": question,
-            "expected_state": expected_state,
-            "expected_clauses": expected_clauses,
-            "actual_state": actual_state,
-            "top_score": round(top_score, 3),
-            "retrieved_ids": retrieved_ids[:5],
-            "supporting_ids": supporting_ids,
-            "state_pass": state_pass,
-            "clause_pass": clause_pass,
-            "overall_pass": overall_pass,
-            "missing_clauses": missing_clauses,
-            "response_preview": response_text[:300],
-            "retrieval_time": round(retrieval_time, 3),
-            "notes": tq.get("notes", ""),
-        })
-
-    # Summary
-    total = len(test_questions)
-    print(f"\n{'=' * 70}")
-    print(f"RESULTS: {passes}/{total} passed, {failures}/{total} failed")
-    print(f"{'=' * 70}")
-
-    # Generate markdown report
-    _generate_report(results, passes, failures, total)
+from config.settings import Settings  # noqa: E402
+from evaluation.metrics import (  # noqa: E402
+    aggregate_results,
+    load_questions,
+    score_case,
+    validate_question_clause_ids,
+)
+from src.pipeline import GroundedAnswerPipeline  # noqa: E402
 
 
-def _generate_report(results, passes, failures, total):
-    """Generate a markdown evaluation report."""
-    report_path = ROOT / "evaluation" / "results.md"
+DEFAULT_QUESTIONS_PATH = ROOT / "evaluation" / "questions.json"
+DEFAULT_RESULTS_DIR = ROOT / "evaluation" / "results"
+DEFAULT_RESULTS_JSON = DEFAULT_RESULTS_DIR / "evaluation.json"
+DEFAULT_RESULTS_MARKDOWN = DEFAULT_RESULTS_DIR / "evaluation.md"
 
+
+def run_evaluation(
+    *,
+    settings: Settings | None = None,
+    quiet: bool = False,
+    questions_path: str | Path | None = None,
+    output_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    """Run the current question set through complete, deterministic responses."""
+
+    configured = settings or Settings.from_env()
+    deterministic = configured.model_copy(
+        update={
+            "llm_provider": "deterministic",
+            "enable_reranking": False,
+        }
+    )
+    source = Path(questions_path) if questions_path else DEFAULT_QUESTIONS_PATH
+    target_dir = Path(output_dir) if output_dir else DEFAULT_RESULTS_DIR
+    questions = load_questions(source)
+
+    started = time.perf_counter()
+    pipeline = GroundedAnswerPipeline.load(deterministic)
+    known_clause_ids = {
+        chunk.clause_id for chunk in pipeline.store.chunks if chunk.clause_id is not None
+    }
+    validate_question_clause_ids(questions, known_clause_ids)
+
+    case_results: list[dict[str, Any]] = []
+    for case in questions:
+        case_started = time.perf_counter()
+        answer = None
+        error: BaseException | None = None
+        try:
+            answer = pipeline.ask(case["question"], include_trace=True)
+        except Exception as exc:  # Preserve the rest of the evaluation run.
+            error = exc
+        elapsed_ms = (time.perf_counter() - case_started) * 1000.0
+        scored = score_case(case, answer, elapsed_ms=elapsed_ms, error=error)
+        scored["response"] = answer.model_dump(mode="json") if answer is not None else None
+        case_results.append(scored)
+        if not quiet or not scored["overall_pass"]:
+            _print_case(scored)
+
+    metrics = aggregate_results(case_results)
+    generated_at = datetime.now(timezone.utc).isoformat()
+    report: dict[str, Any] = {
+        "schema_version": 2,
+        "run_type": "strict_end_to_end",
+        "generated_at_utc": generated_at,
+        "questions_path": str(source.resolve()),
+        "corpus_path": str(deterministic.corpus_path),
+        "corpus_sha256": pipeline.store.manifest.get("corpus_sha256"),
+        "configuration": {
+            "embedding_backend": deterministic.embedding_backend,
+            "embedding_model": pipeline.embedding_engine.model_name,
+            "hybrid_search": deterministic.enable_hybrid_search,
+            "reranking": False,
+            "neighbor_retrieval": deterministic.enable_neighbor_retrieval,
+            "llm_provider": "deterministic",
+            "initial_retrieval_k": deterministic.initial_retrieval_k,
+            "final_k": deterministic.final_k,
+            "refusal_threshold": deterministic.refusal_threshold,
+            "direct_coverage_threshold": deterministic.direct_coverage_threshold,
+        },
+        "duration_seconds": round(time.perf_counter() - started, 3),
+        "passes": metrics["passes"],
+        "failures": metrics["failures"],
+        "metrics": metrics,
+        "cases": case_results,
+    }
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+    json_path = target_dir / DEFAULT_RESULTS_JSON.name
+    markdown_path = target_dir / DEFAULT_RESULTS_MARKDOWN.name
+    _write_json(json_path, report)
+    _write_text(markdown_path, _markdown_report(report))
+    _print_summary(report, json_path, markdown_path)
+    return report
+
+
+def _print_case(result: dict[str, Any]) -> None:
+    status = "PASS" if result["overall_pass"] else "FAIL"
+    failures = ", ".join(result["failure_types"]) or "none"
+    print(
+        f"[{result['id']}] {status} | expected={result['expected_decision']} "
+        f"actual={result['actual_decision']} | failures={failures}"
+    )
+
+
+def _print_summary(report: dict[str, Any], json_path: Path, markdown_path: Path) -> None:
+    metrics = report["metrics"]
+    print()
+    print("STRICT END-TO-END EVALUATION")
+    print(f"Cases:              {metrics['total']}")
+    print(f"Passed / failed:    {metrics['passes']} / {metrics['failures']}")
+    print(f"Strict pass rate:   {metrics['strict_pass_rate']:.1%}")
+    print(f"Decision accuracy: {metrics['decision']['accuracy']:.1%}")
+    print(f"Retrieval recall:  {metrics['retrieval']['micro_clause_recall']:.1%}")
+    print(f"Citation recall:   {metrics['citation']['micro_clause_recall']:.1%}")
+    print(f"Unsupported safety:{metrics['unsupported']['safety_rate']:>6.1%}")
+    print(f"JSON: {json_path}")
+    print(f"Markdown: {markdown_path}")
+
+
+def _markdown_report(report: dict[str, Any]) -> str:
+    metrics = report["metrics"]
     lines = [
         "# Evaluation Results — The Grounded Answer",
         "",
-        f"**Date**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-        f"**Total questions**: {total}",
-        f"**Passed**: {passes}",
-        f"**Failed**: {failures}",
-        f"**Pass rate**: {passes/total*100:.0f}%",
+        f"**Generated (UTC):** {report['generated_at_utc']}",
+        f"**Run type:** `{report['run_type']}`",
+        f"**Corpus SHA-256:** `{report.get('corpus_sha256') or 'unavailable'}`",
+        f"**Embedding backend:** `{report['configuration']['embedding_backend']}`",
+        "**LLM/provider:** deterministic; no generation API used",
         "",
-        "## Summary Table",
+        "## Aggregate metrics",
         "",
-        "| ID | Question | Expected | Actual | Score | Pass |",
-        "|:--|:--|:--|:--|:--|:--|",
+        "| Metric | Result |",
+        "|:--|--:|",
+        f"| Strict cases passed | {metrics['passes']} / {metrics['total']} ({_percent(metrics['strict_pass_rate'])}) |",
+        f"| Decision accuracy | {metrics['decision']['correct']} / {metrics['decision']['total']} ({_percent(metrics['decision']['accuracy'])}) |",
+        f"| ANSWER decision precision / recall | {_state_result(metrics['answer'])} |",
+        f"| REFUSE decision precision / recall | {_state_result(metrics['refuse'])} |",
+        f"| CONFLICT decision precision / recall | {_state_result(metrics['conflict'])} |",
+        f"| Expected evidence retrieval | {metrics['retrieval']['clauses_found']} / {metrics['retrieval']['clauses_expected']} ({_percent(metrics['retrieval']['micro_clause_recall'])}) |",
+        f"| Required citation recall | {metrics['citation']['clauses_cited']} / {metrics['citation']['clauses_expected']} ({_percent(metrics['citation']['micro_clause_recall'])}) |",
+        f"| Citation integrity | {metrics['citation']['integrity_passes']} / {metrics['total']} ({_percent(metrics['citation']['integrity_rate'])}) |",
+        f"| Expected fact recall | {metrics['facts']['facts_found']} / {metrics['facts']['facts_expected']} ({_percent(metrics['facts']['micro_fact_recall'])}) |",
+        f"| Unsupported-claim safety | {metrics['unsupported']['safe_cases']} / {metrics['total']} ({_percent(metrics['unsupported']['safety_rate'])}) |",
+        f"| False answers on REFUSE/CONFLICT cases | {metrics['unsupported']['false_answers']} / {metrics['unsupported']['non_answer_cases']} ({_percent(metrics['unsupported']['false_answer_rate'])}) |",
+        "",
+        "## Failure taxonomy",
+        "",
     ]
+    taxonomy = metrics["failure_taxonomy"]
+    if taxonomy:
+        lines.extend(["| Failure type | Cases |", "|:--|--:|"])
+        lines.extend(f"| `{name}` | {count} |" for name, count in taxonomy.items())
+    else:
+        lines.append("No failures.")
 
-    for r in results:
-        status = "✅" if r["overall_pass"] else "❌"
+    lines.extend(
+        [
+            "",
+            "## Case summary",
+            "",
+            "| ID | Category | Expected | Actual | Retrieval | Citations | Facts | Safety | Result | Failures |",
+            "|:--|:--|:--|:--|:--:|:--:|:--:|:--:|:--:|:--|",
+        ]
+    )
+    for result in report["cases"]:
+        checks = result["checks"]
         lines.append(
-            f"| {r['id']} | {r['question'][:50]}... | {r['expected_state']} "
-            f"| {r['actual_state']} | {r['top_score']} | {status} |"
+            "| {id} | {category} | {expected} | {actual} | {retrieval} | {citation} | "
+            "{facts} | {safety} | {status} | {failures} |".format(
+                id=_cell(result["id"]),
+                category=_cell(result["category"]),
+                expected=result["expected_decision"],
+                actual=result["actual_decision"],
+                retrieval=_mark(checks["retrieval"]),
+                citation=_mark(checks["citation_recall"] and checks["citation_integrity"]),
+                facts=_mark(checks["facts"]),
+                safety=_mark(checks["unsupported_claim_safety"]),
+                status="PASS" if result["overall_pass"] else "FAIL",
+                failures=_cell(", ".join(result["failure_types"]) or "—"),
+            )
         )
 
-    lines.extend(["", "## Detailed Results", ""])
-
-    for r in results:
-        status = "✅ PASS" if r["overall_pass"] else "❌ FAIL"
-        lines.extend([
-            f"### [{r['id']}] {r['question']}",
-            "",
-            f"- **Expected state**: {r['expected_state']}",
-            f"- **Actual state**: {r['actual_state']}",
-            f"- **Top retrieval score**: {r['top_score']}",
-            f"- **Retrieved clauses**: {', '.join(r['retrieved_ids'])}",
-            f"- **Result**: {status}",
-            "",
-        ])
-
-        if r["missing_clauses"]:
-            lines.append(f"- **Missing clauses**: {', '.join(r['missing_clauses'])}")
-            lines.append("")
-
-        if r["notes"]:
-            lines.append(f"> {r['notes']}")
-            lines.append("")
-
-        lines.extend([
-            "**Response preview**:",
-            "```",
-            r["response_preview"],
-            "```",
-            "",
-        ])
-
-    # Analysis section
-    lines.extend([
-        "## Analysis",
-        "",
-        "### What worked",
-        "",
-    ])
-
-    passed = [r for r in results if r["overall_pass"]]
-    failed = [r for r in results if not r["overall_pass"]]
-
-    if passed:
-        for r in passed:
-            lines.append(f"- **{r['id']}**: Correctly produced `{r['actual_state']}` state")
-
-    lines.extend(["", "### What failed", ""])
-
-    if failed:
-        for r in failed:
-            lines.append(
-                f"- **{r['id']}**: Expected `{r['expected_state']}` but got `{r['actual_state']}`. "
-                f"{'Missing clauses: ' + ', '.join(r['missing_clauses']) if r['missing_clauses'] else ''}"
+    lines.extend(["", "## Full case results", ""])
+    for result in report["cases"]:
+        lines.extend(
+            [
+                f"### {result['id']} — {'PASS' if result['overall_pass'] else 'FAIL'}",
+                "",
+                result["question"],
+                "",
+                f"- Expected / actual: `{result['expected_decision']}` / `{result['actual_decision']}`",
+                f"- Retrieved clauses: {_list_or_none(result['retrieved_clause_ids'])}",
+                f"- Cited clauses: {_list_or_none(result['cited_clause_ids'])}",
+                f"- Missing evidence: {_list_or_none(result['missing_evidence_clause_ids'])}",
+                f"- Missing citations: {_list_or_none(result['missing_citation_clause_ids'])}",
+                f"- Missing facts: {_list_or_none(result['missing_facts'])}",
+                f"- Forbidden claims found: {_list_or_none(result['forbidden_claims_found'])}",
+                f"- Failure taxonomy: {_list_or_none(result['failure_types'])}",
+                "",
+                "**Complete answer**",
+                "",
+                "```text",
+                _answer_text(result),
+                "```",
+                "",
+            ]
+        )
+        if result.get("error"):
+            lines.extend(
+                [
+                    f"Error: `{result['error']['type']}: {result['error']['message']}`",
+                    "",
+                ]
             )
-    else:
-        lines.append("All questions passed.")
+    lines.extend(
+        [
+            "## Method",
+            "",
+            "Every case exercised `GroundedAnswerPipeline.ask(..., include_trace=True)` with deterministic answer construction and reranking disabled. A case passes only when all recorded checks pass; retrieval-only success is insufficient.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
 
-    lines.extend([
-        "",
-        "### Threshold calibration",
-        "",
-        f"The current relevance threshold is set at the value defined in `src/evidence.py`.",
-        "See DECISIONS.md for the rationale behind this threshold.",
-        "",
-    ])
 
-    report_text = "\n".join(lines)
-    with open(report_path, "w", encoding="utf-8") as f:
-        f.write(report_text)
+def _write_json(path: Path, payload: dict[str, Any]) -> None:
+    _write_text(path, json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
 
-    print(f"\n📄 Full report saved to: {report_path}")
+
+def _write_text(path: Path, content: str) -> None:
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(content, encoding="utf-8")
+    temporary.replace(path)
+
+
+def _percent(value: float) -> str:
+    return f"{value:.1%}"
+
+
+def _state_result(metric: dict[str, Any]) -> str:
+    return (
+        f"{_percent(metric['decision_precision'])} / {_percent(metric['decision_recall'])} "
+        f"({metric['decision_correct']} correct)"
+    )
+
+
+def _mark(value: bool) -> str:
+    return "PASS" if value else "FAIL"
+
+
+def _cell(value: Any) -> str:
+    return str(value).replace("|", "\\|").replace("\n", " ")
+
+
+def _list_or_none(values: list[Any]) -> str:
+    return ", ".join(f"`{value}`" for value in values) if values else "none"
+
+
+def _answer_text(result: dict[str, Any]) -> str:
+    response = result.get("response")
+    if response:
+        return str(response.get("answer", ""))
+    error = result.get("error")
+    return f"No answer returned ({error['type']}: {error['message']})." if error else "No answer returned."
 
 
 if __name__ == "__main__":
-    run_evaluation()
+    completed = run_evaluation()
+    raise SystemExit(0 if completed["failures"] == 0 else 1)
