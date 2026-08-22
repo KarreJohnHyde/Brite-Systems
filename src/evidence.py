@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import re
-from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -12,19 +11,18 @@ from src.lexical import STOP_WORDS, tokenize
 from src.models import EvidenceAssessment, PolicyChunk, RetrievedClause, SupportType
 from src.retriever import LIST_QUESTION_RE, NUMERIC_PASSAGE_RE, NUMERIC_QUESTION_RE
 
-
-BOOLEAN_RE = re.compile(r"^\s*(can|could|does|do|is|are|may|must|will|would)\b", re.I)
+BOOLEAN_RE = re.compile(r"^\s*(can|could|does|do|is|are|may|must|will|would)\b", re.IGNORECASE)
 CLASSIFICATION_RE = re.compile(
     r"\b(count(?:ed)? as|counted|classif(?:y|ied)|disregard(?:ed)?|eligible|eligibility|qualify)\b",
-    re.I,
+    re.IGNORECASE,
 )
 CLASSIFICATION_PASSAGE_RE = re.compile(
     r"\b(count(?:ed|able)?|treated as|disregard(?:ed)?|eligible|ineligible|not allowable)\b",
-    re.I,
+    re.IGNORECASE,
 )
-EXCEPTION_QUESTION_RE = re.compile(r"\b(exception|including|unless|beyond|over|good cause)\b", re.I)
-EXCEPTION_PASSAGE_RE = re.compile(r"\b(except|unless|extended|where|good cause|outside .* control)\b", re.I)
-MODALITY_RE = re.compile(r"\b(must|may|shall|is not|are not|eligible|ineligible|required|prohibited)\b", re.I)
+EXCEPTION_QUESTION_RE = re.compile(r"\b(exception|including|unless|beyond|over|good cause)\b", re.IGNORECASE)
+EXCEPTION_PASSAGE_RE = re.compile(r"\b(except|unless|extended|where|good cause|outside .* control)\b", re.IGNORECASE)
+MODALITY_RE = re.compile(r"\b(must|may|shall|is not|are not|eligible|ineligible|required|prohibited)\b", re.IGNORECASE)
 GENERIC_SUBJECT_TERMS = {
     "manual", "policy", "say", "state", "rule", "question", "exactly", "actually",
     "standard", "include", "including", "apply", "applicable", "hsp", "program",
@@ -70,7 +68,7 @@ def finding_matches(question: str, finding: dict[str, Any]) -> bool:
     normalized_question = re.sub(r"[-–—]", " ", question.lower())
     trigger_patterns = finding.get("trigger_patterns", [])
     if trigger_patterns:
-        return any(re.search(pattern, normalized_question, re.I) for pattern in trigger_patterns)
+        return any(re.search(pattern, normalized_question, re.IGNORECASE) for pattern in trigger_patterns)
     phrases = [re.sub(r"[-–—]", " ", term.lower()) for term in finding.get("topic_terms", [])]
     if any(len(phrase.split()) >= 2 and phrase in normalized_question for phrase in phrases):
         return True
@@ -217,11 +215,11 @@ class EvidenceAnalyzer:
             r"^.*?\.\s*(?=(?:how|what|when|where|which|who|can|does|is|are)\b)",
             "",
             question,
-            flags=re.I,
+            flags=re.IGNORECASE,
         )
         parts = (
-            re.split(r"\s*,\s*|\s+and\s+|\s+including\s+", focused, flags=re.I)
-            if re.search(r",|\band\b|\bincluding\b", focused, re.I)
+            re.split(r"\s*,\s*|\s+and\s+|\s+including\s+", focused, flags=re.IGNORECASE)
+            if re.search(r",|\band\b|\bincluding\b", focused, re.IGNORECASE)
             else [focused]
         )
         segments: list[list[set[str]]] = []
@@ -256,12 +254,12 @@ class EvidenceAnalyzer:
 
     @staticmethod
     def _aspect_term_sets(question: str) -> list[tuple[set[str], int]]:
-        if not re.search(r",|\band\b|\bincluding\b", question, re.I):
+        if not re.search(r",|\band\b|\bincluding\b", question, re.IGNORECASE):
             return []
-        segments = re.split(r"\s*,\s*|\s+and\s+|\s+including\s+", question, flags=re.I)
+        segments = re.split(r"\s*,\s*|\s+and\s+|\s+including\s+", question, flags=re.IGNORECASE)
         aspects: list[tuple[set[str], int]] = []
         for segment in segments:
-            segment = re.sub(r"^(?:and|including)\s+", "", segment.strip(), flags=re.I)
+            segment = re.sub(r"^(?:and|including)\s+", "", segment.strip(), flags=re.IGNORECASE)
             original = set(tokenize(segment, expand=False)) - GENERIC_SUBJECT_TERMS
             if not original:
                 continue
@@ -276,7 +274,7 @@ class EvidenceAnalyzer:
         list_intent = bool(LIST_QUESTION_RE.search(question))
         classification_intent = bool(
             CLASSIFICATION_RE.search(question)
-            and not re.search(r",|\band\b|\bincluding\b", question, re.I)
+            and not re.search(r",|\band\b|\bincluding\b", question, re.IGNORECASE)
         )
         boolean_intent = bool(BOOLEAN_RE.search(question))
 
@@ -285,11 +283,11 @@ class EvidenceAnalyzer:
                 return 1.0
             if EXCEPTION_QUESTION_RE.search(question) and EXCEPTION_PASSAGE_RE.search(text):
                 return 0.9
-            if re.search(r",|\band\b|\bincluding\b", question, re.I) and MODALITY_RE.search(text):
+            if re.search(r",|\band\b|\bincluding\b", question, re.IGNORECASE) and MODALITY_RE.search(text):
                 return 0.75
             return 0.2
         if list_intent:
-            if "(a)" in chunk.text or "|" in chunk.raw_text or re.search(r"\bfollowing\b|\bmay be made\b", text, re.I):
+            if "(a)" in chunk.text or "|" in chunk.raw_text or re.search(r"\bfollowing\b|\bmay be made\b", text, re.IGNORECASE):
                 return 1.0
             return 0.35
         if classification_intent:
@@ -298,7 +296,7 @@ class EvidenceAnalyzer:
             return 1.0 if MODALITY_RE.search(text) else 0.35
         if EXCEPTION_QUESTION_RE.search(question) and EXCEPTION_PASSAGE_RE.search(text):
             return 0.95
-        return 0.8 if MODALITY_RE.search(text) or re.search(r"\bis\b|\bare\b", text, re.I) else 0.55
+        return 0.8 if MODALITY_RE.search(text) or re.search(r"\bis\b|\bare\b", text, re.IGNORECASE) else 0.55
 
 
 # Backwards-compatible enums/function names are intentionally omitted: callers

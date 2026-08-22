@@ -12,7 +12,13 @@ from src.decision_engine import DecisionEngine
 from src.embeddings import EmbeddingEngine
 from src.evidence import EvidenceAnalyzer
 from src.generator import AnswerBuilder
-from src.models import Decision, EvidenceLevel, IngestionReport, PolicyAnswer, PolicyChunk
+from src.models import (
+    Decision,
+    EvidenceLevel,
+    IngestionReport,
+    PolicyAnswer,
+    PolicyChunk,
+)
 from src.parser import (
     build_corpus_report,
     find_chunks,
@@ -22,7 +28,6 @@ from src.parser import (
 from src.refusal import load_contacts, select_next_step
 from src.retriever import Retriever
 from src.vector_store import IndexIntegrityError, VectorStore
-
 
 LOGGER = logging.getLogger("grounded_answer")
 
@@ -98,7 +103,7 @@ class GroundedAnswerPipeline:
         )
 
     @classmethod
-    def load(cls, settings: Settings) -> "GroundedAnswerPipeline":
+    def load(cls, settings: Settings) -> GroundedAnswerPipeline:
         manifest_path = settings.index_dir / VectorStore.MANIFEST_NAME
         if not manifest_path.exists():
             raise FileNotFoundError(

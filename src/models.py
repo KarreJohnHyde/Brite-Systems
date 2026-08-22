@@ -145,7 +145,7 @@ class PolicyAnswer(BaseModel):
     trace: DecisionTrace | None = None
 
     @model_validator(mode="after")
-    def enforce_state_contract(self) -> "PolicyAnswer":
+    def enforce_state_contract(self) -> PolicyAnswer:
         if self.decision == Decision.ANSWER and not self.citations:
             raise ValueError("ANSWER requires at least one trusted citation")
         if self.decision == Decision.CONFLICT and len(self.citations) < 2:

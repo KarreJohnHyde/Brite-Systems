@@ -107,6 +107,7 @@ def run_evaluation(
         "metrics": metrics,
         "cases": case_results,
     }
+    report["requirements"] = _requirement_statuses(report)
 
     target_dir.mkdir(parents=True, exist_ok=True)
     json_path = target_dir / DEFAULT_RESULTS_JSON.name
@@ -137,8 +138,78 @@ def _print_summary(report: dict[str, Any], json_path: Path, markdown_path: Path)
     print(f"Retrieval recall:  {metrics['retrieval']['micro_clause_recall']:.1%}")
     print(f"Citation recall:   {metrics['citation']['micro_clause_recall']:.1%}")
     print(f"Unsupported safety:{metrics['unsupported']['safety_rate']:>6.1%}")
+    print()
+    _print_requirement_block("CORE REQUIREMENTS", report["requirements"]["core"])
+    print()
+    _print_requirement_block("BONUS", report["requirements"]["bonus"])
     print(f"JSON: {json_path}")
     print(f"Markdown: {markdown_path}")
+
+
+def _print_requirement_block(title: str, items: list[dict[str, Any]]) -> None:
+    print(title)
+    for item in items:
+        status = "PASS" if item["pass"] else "FAIL"
+        print(f"[{status}] {item['name']}")
+
+
+def _requirement_statuses(report: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    metrics = report["metrics"]
+    cases = report["cases"]
+    readme = (ROOT / "README.md").read_text(encoding="utf-8") if (ROOT / "README.md").exists() else ""
+    main_py = (ROOT / "main.py").read_text(encoding="utf-8") if (ROOT / "main.py").exists() else ""
+    calibration_report = ROOT / "evaluation" / "results" / "calibration.md"
+
+    def case_passes(decision: str) -> bool:
+        return any(
+            case["expected_decision"] == decision
+            and case["actual_decision"] == decision
+            and case["overall_pass"]
+            for case in cases
+        )
+
+    core = [
+        {
+            "name": "Clause-level citation",
+            "pass": metrics["citation"]["micro_clause_recall"] == 1.0
+            and metrics["citation"]["integrity_rate"] == 1.0,
+        },
+        {
+            "name": "Visible refusal",
+            "pass": case_passes("REFUSE"),
+        },
+        {
+            "name": "At least one correct refusal",
+            "pass": case_passes("REFUSE"),
+        },
+        {
+            "name": "10+ self-created test questions",
+            "pass": metrics["total"] >= 10,
+        },
+        {
+            "name": "Pass/fail results",
+            "pass": all("overall_pass" in case and "failure_types" in case for case in cases),
+        },
+        {
+            "name": "README clean-clone instructions",
+            "pass": "Clean-clone setup" in readme and "python main.py ingest" in readme,
+        },
+    ]
+    bonus = [
+        {
+            "name": "Contradiction surfaced",
+            "pass": case_passes("CONFLICT"),
+        },
+        {
+            "name": "Refusal threshold calibrated",
+            "pass": calibration_report.exists() and "Recommended" in calibration_report.read_text(encoding="utf-8"),
+        },
+        {
+            "name": "Citation source lookup",
+            "pass": 'add_parser("source"' in main_py and 'aliases=["show-clause"]' in main_py,
+        },
+    ]
+    return {"core": core, "bonus": bonus}
 
 
 def _markdown_report(report: dict[str, Any]) -> str:
@@ -155,7 +226,7 @@ def _markdown_report(report: dict[str, Any]) -> str:
         "## Aggregate metrics",
         "",
         "| Metric | Result |",
-        "|:--|--:|",
+        "| :-- | --: |",
         f"| Strict cases passed | {metrics['passes']} / {metrics['total']} ({_percent(metrics['strict_pass_rate'])}) |",
         f"| Decision accuracy | {metrics['decision']['correct']} / {metrics['decision']['total']} ({_percent(metrics['decision']['accuracy'])}) |",
         f"| ANSWER decision precision / recall | {_state_result(metrics['answer'])} |",
@@ -168,12 +239,30 @@ def _markdown_report(report: dict[str, Any]) -> str:
         f"| Unsupported-claim safety | {metrics['unsupported']['safe_cases']} / {metrics['total']} ({_percent(metrics['unsupported']['safety_rate'])}) |",
         f"| False answers on REFUSE/CONFLICT cases | {metrics['unsupported']['false_answers']} / {metrics['unsupported']['non_answer_cases']} ({_percent(metrics['unsupported']['false_answer_rate'])}) |",
         "",
-        "## Failure taxonomy",
+        "## Requirement summary",
+        "",
+        "### Core requirements",
         "",
     ]
+    lines.extend(_markdown_requirement_lines(report["requirements"]["core"]))
+    lines.extend(
+        [
+            "",
+            "### Bonus",
+            "",
+        ]
+    )
+    lines.extend(_markdown_requirement_lines(report["requirements"]["bonus"]))
+    lines.extend(
+        [
+            "",
+        "## Failure taxonomy",
+        "",
+        ]
+    )
     taxonomy = metrics["failure_taxonomy"]
     if taxonomy:
-        lines.extend(["| Failure type | Cases |", "|:--|--:|"])
+        lines.extend(["| Failure type | Cases |", "| :-- | --: |"])
         lines.extend(f"| `{name}` | {count} |" for name, count in taxonomy.items())
     else:
         lines.append("No failures.")
@@ -184,7 +273,7 @@ def _markdown_report(report: dict[str, Any]) -> str:
             "## Case summary",
             "",
             "| ID | Category | Expected | Actual | Retrieval | Citations | Facts | Safety | Result | Failures |",
-            "|:--|:--|:--|:--|:--:|:--:|:--:|:--:|:--:|:--|",
+            "| :-- | :-- | :-- | :-- | :--: | :--: | :--: | :--: | :--: | :-- |",
         ]
     )
     for result in report["cases"]:
@@ -222,7 +311,7 @@ def _markdown_report(report: dict[str, Any]) -> str:
                 f"- Forbidden claims found: {_list_or_none(result['forbidden_claims_found'])}",
                 f"- Failure taxonomy: {_list_or_none(result['failure_types'])}",
                 "",
-                "**Complete answer**",
+                f"#### Complete answer ({result['id']})",
                 "",
                 "```text",
                 _answer_text(result),
@@ -271,6 +360,12 @@ def _state_result(metric: dict[str, Any]) -> str:
 
 def _mark(value: bool) -> str:
     return "PASS" if value else "FAIL"
+
+
+def _markdown_requirement_lines(items: list[dict[str, Any]]) -> list[str]:
+    lines = ["| Status | Requirement |", "| :-- | :-- |"]
+    lines.extend(f"| {_mark(item['pass'])} | {_cell(item['name'])} |" for item in items)
+    return lines
 
 
 def _cell(value: Any) -> str:

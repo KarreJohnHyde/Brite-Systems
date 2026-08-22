@@ -9,8 +9,7 @@ from collections import Counter
 from src.models import PolicyChunk
 from src.parser import get_embedding_text
 
-
-TOKEN_RE = re.compile(r"§?\d+(?:\.\d+)+|\$?\d+(?:,\d{3})*(?:\.\d+)?%?|[a-z][a-z'-]*", re.I)
+TOKEN_RE = re.compile(r"§?\d+(?:\.\d+)+|\$?\d+(?:,\d{3})*(?:\.\d+)?%?|[a-z][a-z'-]*", re.IGNORECASE)
 STOP_WORDS = {
     "a", "an", "and", "are", "as", "at", "be", "based", "by", "can", "could",
     "do", "does", "for", "from", "had", "has", "have", "how", "i", "if", "in",
@@ -78,8 +77,7 @@ PHRASE_EXPANSIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
 
 def stem(token: str) -> str:
     token = token.lower().strip("§$").replace(",", "")
-    if token.endswith("'s"):
-        token = token[:-2]
+    token = token.removesuffix("'s")
     if len(token) > 5 and token.endswith("ies"):
         return token[:-3] + "y"
     if len(token) > 5 and token.endswith("ied"):

@@ -8,7 +8,6 @@ from collections.abc import Iterable
 from src.lexical import STOP_WORDS, tokenize
 from src.models import Citation, PolicyChunk, RetrievedClause
 
-
 CLAUSE_REFERENCE_RE = re.compile(r"§(\d+\.\d+\.\d+)")
 ANY_SOURCE_REFERENCE_RE = re.compile(r"§\d+(?:\.\d+)+")
 NUMBER_RE = re.compile(r"\$?\d+(?:,\d{3})*(?:\.\d+)?%?")

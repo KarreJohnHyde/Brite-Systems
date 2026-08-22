@@ -7,7 +7,6 @@ from collections.abc import Sequence
 
 from src.models import PolicyChunk
 
-
 SYSTEM_PROMPT = """You are a policy-grounding component in a decision-support system.
 
 Follow these rules without exception:

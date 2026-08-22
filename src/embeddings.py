@@ -11,8 +11,7 @@ import numpy as np
 from src.models import PolicyChunk
 from src.parser import get_embedding_text
 
-
-WORD_RE = re.compile(r"[a-z0-9]+(?:\.[0-9]+)*", re.I)
+WORD_RE = re.compile(r"[a-z0-9]+(?:\.[0-9]+)*", re.IGNORECASE)
 DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 

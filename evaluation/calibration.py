@@ -294,7 +294,7 @@ def _markdown_report(report: dict[str, Any]) -> str:
         "## Sweep results",
         "",
         "| Candidate | Refusal | Coverage | Strict | Decision | ANSWER | REFUSE | CONFLICT | Retrieval | Citations | Safety | False answers | Missed conflicts |",
-        "|:--|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|",
+        "| :-- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |",
     ]
     ordered = sorted(
         report["candidates"],

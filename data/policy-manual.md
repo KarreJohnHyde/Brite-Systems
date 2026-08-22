@@ -306,7 +306,7 @@
 **6.6.1** A household is not eligible where countable income exceeds the applicable threshold. The thresholds are —
 
 | Household size | Monthly threshold |
-|:--|:--|
+| :-- | :-- |
 | 1 | $1,180 |
 | 2 | $1,590 |
 | 3 | $2,000 |
@@ -331,7 +331,7 @@
 **7.2.1** The monthly needs figures are —
 
 | Household composition | Monthly needs figure |
-|:--|:--|
+| :-- | :-- |
 | Single adult | $1,240 |
 | Couple | $1,670 |
 | Each dependent child | + $330 |

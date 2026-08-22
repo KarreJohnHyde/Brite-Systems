@@ -11,20 +11,19 @@ from src.evidence import finding_matches, load_findings
 from src.lexical import tokenize
 from src.models import ConflictFinding, EvidenceAssessment, RetrievedClause, SupportType
 
-
 QUANTITY_RE = re.compile(
     r"(?P<value>\$?\d+(?:,\d{3})*(?:\.\d+)?)\s*"
     r"(?P<unit>calendar\s+days?|working\s+days?|days?|weeks?|months?|years?|per\s+cent|percent|%)",
-    re.I,
+    re.IGNORECASE,
 )
-EXCEPTION_SCOPE_RE = re.compile(r"\b(extended to|except|unless|where|up to|first)\b", re.I)
+EXCEPTION_SCOPE_RE = re.compile(r"\b(extended to|except|unless|where|up to|first)\b", re.IGNORECASE)
 NEGATIVE_ACTION_RE = re.compile(
     r"\b(?:must not|shall not|may not)\s+(?:be\s+)?(?P<action>[a-z]+)",
-    re.I,
+    re.IGNORECASE,
 )
 POSITIVE_ACTION_RE = re.compile(
     r"\b(?:must|shall|may)\s+(?!not\b)(?:be\s+)?(?P<action>[a-z]+)",
-    re.I,
+    re.IGNORECASE,
 )
 
 
@@ -150,7 +149,7 @@ class ContradictionDetector:
 
         unit = different_units[0]
         identifier = hashlib.sha256(
-            f"{left.chunk.chunk_id}|{right.chunk.chunk_id}|{unit}".encode("utf-8")
+            f"{left.chunk.chunk_id}|{right.chunk.chunk_id}|{unit}".encode()
         ).hexdigest()[:10]
         return ConflictFinding(
             finding_id=f"numeric_{identifier}",
@@ -174,10 +173,10 @@ class ContradictionDetector:
 
         left_text = left.chunk.text
         right_text = right.chunk.text
-        left_ineligible = bool(re.search(r"\b(?:(?:is|are) not eligible|ineligible|excluded)\b", left_text, re.I))
-        right_ineligible = bool(re.search(r"\b(?:(?:is|are) not eligible|ineligible|excluded)\b", right_text, re.I))
-        left_eligible = bool(re.search(r"\b(?:is|are) eligible\b", left_text, re.I))
-        right_eligible = bool(re.search(r"\b(?:is|are) eligible\b", right_text, re.I))
+        left_ineligible = bool(re.search(r"\b(?:(?:is|are) not eligible|ineligible|excluded)\b", left_text, re.IGNORECASE))
+        right_ineligible = bool(re.search(r"\b(?:(?:is|are) not eligible|ineligible|excluded)\b", right_text, re.IGNORECASE))
+        left_eligible = bool(re.search(r"\b(?:is|are) eligible\b", left_text, re.IGNORECASE))
+        right_eligible = bool(re.search(r"\b(?:is|are) eligible\b", right_text, re.IGNORECASE))
         eligibility_clash = (left_ineligible and right_eligible) or (right_ineligible and left_eligible)
 
         left_negative_actions = {
@@ -215,7 +214,7 @@ class ContradictionDetector:
             return None
 
         identifier = hashlib.sha256(
-            f"{left.chunk.chunk_id}|{right.chunk.chunk_id}|polarity".encode("utf-8")
+            f"{left.chunk.chunk_id}|{right.chunk.chunk_id}|polarity".encode()
         ).hexdigest()[:10]
         return ConflictFinding(
             finding_id=f"polarity_{identifier}",

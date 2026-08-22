@@ -1,6 +1,6 @@
 # Threshold Calibration — The Grounded Answer
 
-**Generated (UTC):** 2026-08-22T20:07:22.195676+00:00
+**Generated (UTC):** 2026-08-22T20:36:47.628448+00:00
 **Mode:** deterministic hashing embeddings; no LLM, reranker, or network model
 **Candidates evaluated:** 28
 
@@ -28,7 +28,7 @@ Baseline `r0.58_c0.34` passed 18 / 18 strict cases with 100.0% decision accuracy
 ## Sweep results
 
 | Candidate | Refusal | Coverage | Strict | Decision | ANSWER | REFUSE | CONFLICT | Retrieval | Citations | Safety | False answers | Missed conflicts |
-|:--|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| :-- | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: | --: |
 | r0.42_c0.24 | 0.42 | 0.24 | 100.0% | 100.0% | 100.0% | 100.0% | 100.0% | 100.0% | 100.0% | 100.0% | 0 | 0 |
 | r0.42_c0.28 | 0.42 | 0.28 | 100.0% | 100.0% | 100.0% | 100.0% | 100.0% | 100.0% | 100.0% | 100.0% | 0 | 0 |
 | r0.42_c0.34 | 0.42 | 0.34 | 100.0% | 100.0% | 100.0% | 100.0% | 100.0% | 100.0% | 100.0% | 100.0% | 0 | 0 |

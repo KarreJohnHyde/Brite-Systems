@@ -16,12 +16,11 @@ from src.models import (
     SupportType,
 )
 
-
 INDIVIDUAL_DETERMINATION_RE = re.compile(
     r"\b(am i|will i|would i|my eligibility|exactly how much|how much (?:assistance )?(?:will|would|do) i|how old (?:must|do|should) i)\b",
-    re.I,
+    re.IGNORECASE,
 )
-CASE_RECORD_RE = re.compile(r"\b(why was my|why did (?:they|the department)|what happened to my case)\b", re.I)
+CASE_RECORD_RE = re.compile(r"\b(why was my|why did (?:they|the department)|what happened to my case)\b", re.IGNORECASE)
 
 
 class DecisionEngine:
@@ -161,18 +160,18 @@ class DecisionEngine:
             r"^.*?\.\s*(?=(?:how|what|when|where|which|who|can|does|is|are)\b)",
             "",
             question,
-            flags=re.I,
+            flags=re.IGNORECASE,
         )
-        if not re.search(r",|\band\b|\bincluding\b", question, re.I):
+        if not re.search(r",|\band\b|\bincluding\b", question, re.IGNORECASE):
             return []
-        segments = re.split(r"\s*,\s*|\s+and\s+|\s+including\s+", question, flags=re.I)
+        segments = re.split(r"\s*,\s*|\s+and\s+|\s+including\s+", question, flags=re.IGNORECASE)
         aspects = []
         for segment in segments:
             cleaned = re.sub(
                 r"^(?:and|including)\s+",
                 "",
                 segment.strip(" ?.!") ,
-                flags=re.I,
+                flags=re.IGNORECASE,
             )
             terms = tokenize(cleaned, expand=True)
             if cleaned and len(set(terms)) >= 1:

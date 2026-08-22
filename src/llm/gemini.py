@@ -12,7 +12,6 @@ from src.llm.base import LLMProvider, LLMProviderError
 from src.llm.prompts import SYSTEM_PROMPT, build_generation_prompt, source_ids
 from src.models import Decision, GenerationSelection, PolicyChunk
 
-
 DEFAULT_GEMINI_MODEL = "gemini-3.6-flash"
 
 

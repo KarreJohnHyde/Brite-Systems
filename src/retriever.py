@@ -13,18 +13,17 @@ from src.lexical import BM25Index, tokenize
 from src.models import PolicyChunk, RetrievedClause
 from src.vector_store import VectorStore
 
-
 NUMERIC_QUESTION_RE = re.compile(
     r"\b(how (?:many|much|long)|time limit|deadline|amount|rate|percentage|threshold|limit)\b",
-    re.I,
+    re.IGNORECASE,
 )
 NUMERIC_PASSAGE_RE = re.compile(
     r"(?:\$\s*\d|\b\d+(?:\.\d+)?\s*(?:calendar\s+|working\s+)?(?:days?|weeks?|months?|years?|per\s*cent|percent|%))",
-    re.I,
+    re.IGNORECASE,
 )
 LIST_QUESTION_RE = re.compile(
     r"\b(which|what (?:are|is|income|resources?|conditions?|evidence|ways?|documents?|types?|kinds?))\b",
-    re.I,
+    re.IGNORECASE,
 )
 CLAUSE_ID_RE = re.compile(r"§?(\d+\.\d+(?:\.\d+)?)")
 
@@ -269,7 +268,7 @@ class Retriever:
                 for sibling in self._by_section.get(chunk.section_id, []):
                     add(sibling, parent, f"exception:{chunk.chunk_id}")
 
-        if re.search(r"\b(am i|will i|exactly how much)\b", question, re.I) and primary:
+        if re.search(r"\b(am i|will i|exactly how much)\b", question, re.IGNORECASE) and primary:
             intent_titles = {
                 "the basic conditions",
                 "resources",
@@ -308,7 +307,7 @@ class Retriever:
             has_seed = any(item.chunk.clause_id in clause_ids for item in selected.values())
             required_overlap = 1 if len(topic_terms) <= 2 else (2 if len(topic_terms) <= 5 else 3)
             patterns = finding.get("trigger_patterns", [])
-            pattern_match = any(re.search(pattern, question, re.I) for pattern in patterns)
+            pattern_match = any(re.search(pattern, question, re.IGNORECASE) for pattern in patterns)
             if has_seed and (pattern_match or len(overlap) >= required_overlap):
                 parent = next(item for item in selected.values() if item.chunk.clause_id in clause_ids)
                 for clause_id in clause_ids:

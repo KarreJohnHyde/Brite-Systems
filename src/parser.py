@@ -6,17 +6,16 @@ import hashlib
 import json
 import re
 from collections import defaultdict
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 from src.models import IngestionReport, PolicyChunk
-
 
 PART_RE = re.compile(r"^#\s+Part\s+(\d+)\s*[—–-]\s*(.+?)\s*$")
 SECTION_RE = re.compile(r"^##\s+(\d+\.\d+)\s+(.+?)\s*$")
 CLAUSE_RE = re.compile(r"^\*\*(\d+\.\d+\.\d+)(?:\s+([^*]+?))?\*\*\s*(.*)$")
 CROSS_REF_RE = re.compile(r"§(\d+\.\d+(?:\.\d+)?)")
-VERSION_RE = re.compile(r"Consolidated text as at\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})", re.I)
+VERSION_RE = re.compile(r"Consolidated text as at\s+(\d{1,2}\s+[A-Za-z]+\s+\d{4})", re.IGNORECASE)
 
 
 class CorpusParseError(ValueError):
@@ -146,7 +145,7 @@ def parse_policy_manual(filepath: str | Path) -> list[PolicyChunk]:
         end_offset = start_offset + len(source_text.encode("utf-8"))
         source_digest = hashlib.sha256(source_text.encode("utf-8")).hexdigest()
         chunk_id = "chunk_" + hashlib.sha256(
-            f"{doc_id}|{document_version}|{clause_id}|{source_digest}".encode("utf-8")
+            f"{doc_id}|{document_version}|{clause_id}|{source_digest}".encode()
         ).hexdigest()[:16]
         display_text = _display_text(raw_text)
 
