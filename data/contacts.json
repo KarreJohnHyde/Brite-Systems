@@ -1,0 +1,32 @@
+{
+    "general": {
+        "name": "Calder County Department of Household Services",
+        "description": "General benefits policy inquiries",
+        "phone": "(555) 234-5678",
+        "email": "benefits@caldercounty.gov"
+    },
+    "eligibility": {
+        "name": "Benefits Eligibility Team",
+        "description": "Questions about eligibility, income thresholds, and exclusions",
+        "phone": "(555) 234-5679",
+        "email": "eligibility@caldercounty.gov"
+    },
+    "appeals": {
+        "name": "Calder County Assistance Appeals Panel",
+        "description": "Appeals against review outcomes",
+        "phone": "(555) 234-5680",
+        "email": "appeals@caldercounty.gov"
+    },
+    "supervisor": {
+        "name": "Benefits Policy Supervisor",
+        "description": "Complex cases, contradictions in policy, supervisor referrals",
+        "phone": "(555) 234-5681",
+        "email": "supervisor@caldercounty.gov"
+    },
+    "district_offices": [
+        "Calder Central",
+        "Northgate",
+        "Weybridge",
+        "Ash Hill"
+    ]
+}
