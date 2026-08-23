@@ -9,6 +9,7 @@ dist/
 # Virtual environments
 .venv/
 venv/
+.training-venv/
 
 # Test and coverage output
 .pytest_cache/
@@ -20,6 +21,10 @@ htmlcov/
 data/indexes/
 data/processed/
 data/faiss_index/
+data/trained-indexes/
+
+# Locally trained model weights are reproducible but too large for source control.
+models/candidates/
 
 # Credentials and local runtime configuration
 .env

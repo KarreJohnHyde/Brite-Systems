@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import ValidationError
 
@@ -23,11 +23,13 @@ class GeminiProvider(LLMProvider):
         *,
         api_key: str | None = None,
         model: str = DEFAULT_GEMINI_MODEL,
+        thinking_level: Literal["minimal", "low", "medium", "high"] = "minimal",
         client: Any | None = None,
     ) -> None:
         self.model = model.strip()
         if not self.model:
             raise LLMProviderError("Gemini model name must not be empty")
+        self.thinking_level = thinking_level
 
         if client is not None:
             self._client = client
@@ -66,16 +68,21 @@ class GeminiProvider(LLMProvider):
             raise LLMProviderError(f"Invalid Gemini generation input: {exc}") from exc
 
         try:
+            generation_config = {
+                "system_instruction": SYSTEM_PROMPT,
+                "temperature": 0.0,
+                "max_output_tokens": 2048,
+                "response_mime_type": "application/json",
+                "response_schema": GenerationSelection,
+            }
+            if self.model.startswith("gemini-3"):
+                generation_config["thinking_config"] = {
+                    "thinking_level": self.thinking_level
+                }
             response = self._client.models.generate_content(
                 model=self.model,
                 contents=prompt,
-                config={
-                    "system_instruction": SYSTEM_PROMPT,
-                    "temperature": 0.0,
-                    "max_output_tokens": 1024,
-                    "response_mime_type": "application/json",
-                    "response_schema": GenerationSelection,
-                },
+                config=generation_config,
             )
         except Exception as exc:
             raise LLMProviderError(

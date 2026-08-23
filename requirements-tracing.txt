@@ -1,0 +1,3 @@
+# Optional privacy-preserving LangSmith observability.
+-r requirements.txt
+langsmith==0.11.1

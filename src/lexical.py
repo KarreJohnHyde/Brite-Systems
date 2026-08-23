@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import re
 from collections import Counter
+from functools import lru_cache
 
 from src.models import PolicyChunk
 from src.parser import get_embedding_text
@@ -17,10 +18,11 @@ STOP_WORDS = {
     "there", "they", "this", "to", "under", "was", "what", "when", "where", "which",
     "who", "will", "with", "would", "manual", "policy", "please", "tell", "about",
     "calder", "county", "program", "hsp", "assistance", "department", "may", "might",
-    "must", "shall", "should",
+    "must", "shall", "should", "i'm", "im", "i've", "ive", "while",
 }
 
 SYNONYMS: dict[str, tuple[str, ...]] = {
+    "apply": ("application",),
     "qualify": ("eligible", "eligibility"),
     "qualified": ("eligible", "eligibility"),
     "eligible": ("eligibility",),
@@ -61,6 +63,10 @@ SYNONYMS: dict[str, tuple[str, ...]] = {
     "proof": ("evidence",),
     "prove": ("evidence",),
     "first": ("before",),
+    "max": ("maximum", "limit", "exceed"),
+    "maximum": ("limit", "exceed"),
+    "help": ("assistance", "eligible", "eligibility"),
+    "keep": ("continue", "remain"),
 }
 
 PHRASE_EXPANSIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -72,6 +78,8 @@ PHRASE_EXPANSIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("time limit", ("period", "days", "within")),
     ("full time", ("full-time",)),
     ("how much assistance", ("award", "needs", "figure", "countable", "income")),
+    ("keep getting help", ("continue", "eligible", "eligibility", "award")),
+    ("keep receiving help", ("continue", "eligible", "eligibility", "award")),
 )
 
 
@@ -83,12 +91,64 @@ def stem(token: str) -> str:
     if len(token) > 5 and token.endswith("ied"):
         return token[:-3] + "y"
     if len(token) > 5 and token.endswith("ing"):
-        return token[:-3]
+        root = token[:-3]
+        if len(root) > 2 and root[-1] == root[-2]:
+            root = root[:-1]
+        return root
     if len(token) > 4 and token.endswith("ed"):
         return token[:-2]
     if len(token) > 3 and token.endswith("s") and not token.endswith("ss"):
         return token[:-1]
     return token
+
+
+@lru_cache(maxsize=4096)
+def _fuzzy_match_cached(token: str, vocabulary: tuple[str, ...]) -> str | None:
+    """Resolve a likely one-edit misspelling without broad query rewriting."""
+
+    if len(token) < 5 or token.replace(".", "").isdigit() or token in vocabulary:
+        return None
+    candidates: list[str] = []
+    for candidate in vocabulary:
+        if abs(len(candidate) - len(token)) > 1:
+            continue
+        if not candidate or candidate[0] != token[0] or not _one_edit_or_transposition(token, candidate):
+            continue
+        candidates.append(candidate)
+    return candidates[0] if len(candidates) == 1 else None
+
+
+def _one_edit_or_transposition(left: str, right: str) -> bool:
+    if left == right or abs(len(left) - len(right)) > 1:
+        return False
+    if len(left) == len(right):
+        differences = [index for index, pair in enumerate(zip(left, right, strict=True)) if pair[0] != pair[1]]
+        if len(differences) == 1:
+            return True
+        return (
+            len(differences) == 2
+            and differences[1] == differences[0] + 1
+            and left[differences[0]] == right[differences[1]]
+            and left[differences[1]] == right[differences[0]]
+        )
+    shorter, longer = (left, right) if len(left) < len(right) else (right, left)
+    short_index = long_index = edits = 0
+    while short_index < len(shorter) and long_index < len(longer):
+        if shorter[short_index] == longer[long_index]:
+            short_index += 1
+            long_index += 1
+            continue
+        edits += 1
+        long_index += 1
+        if edits > 1:
+            return False
+    return True
+
+
+def conservative_fuzzy_match(token: str, vocabulary: set[str]) -> str | None:
+    """Return one conservative vocabulary correction for a query token."""
+
+    return _fuzzy_match_cached(stem(token), tuple(sorted(vocabulary)))
 
 
 def tokenize(text: str, *, expand: bool = False, keep_stop_words: bool = False) -> list[str]:
@@ -141,6 +201,12 @@ class BM25Index:
         query_terms = tokenize(question, expand=True)
         if not query_terms:
             return []
+        vocabulary = set(self.document_frequency)
+        query_terms.extend(
+            correction
+            for term in tuple(query_terms)
+            if (correction := conservative_fuzzy_match(term, vocabulary)) is not None
+        )
         raw_scores = [self._score(query_terms, index) for index in range(len(self.chunks))]
         ranked = sorted(enumerate(raw_scores), key=lambda item: item[1], reverse=True)
         positive = [(idx, score) for idx, score in ranked if score > 0][:k]

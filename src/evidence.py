@@ -7,8 +7,9 @@ import re
 from pathlib import Path
 from typing import Any
 
-from src.lexical import STOP_WORDS, tokenize
+from src.lexical import STOP_WORDS, conservative_fuzzy_match, tokenize
 from src.models import EvidenceAssessment, PolicyChunk, RetrievedClause, SupportType
+from src.query_analysis import requested_clause_lookup_ids
 from src.retriever import LIST_QUESTION_RE, NUMERIC_PASSAGE_RE, NUMERIC_QUESTION_RE
 
 BOOLEAN_RE = re.compile(r"^\s*(can|could|does|do|is|are|may|must|will|would)\b", re.IGNORECASE)
@@ -23,6 +24,41 @@ CLASSIFICATION_PASSAGE_RE = re.compile(
 EXCEPTION_QUESTION_RE = re.compile(r"\b(exception|including|unless|beyond|over|good cause)\b", re.IGNORECASE)
 EXCEPTION_PASSAGE_RE = re.compile(r"\b(except|unless|extended|where|good cause|outside .* control)\b", re.IGNORECASE)
 MODALITY_RE = re.compile(r"\b(must|may|shall|is not|are not|eligible|ineligible|required|prohibited)\b", re.IGNORECASE)
+CONTINUATION_QUESTION_RE = re.compile(
+    r"\b(keep (?:getting|receiving)|continue|still|remain)\b",
+    re.IGNORECASE,
+)
+CONTINUATION_PASSAGE_RE = re.compile(
+    r"\b(continues? to satisfy|continues? to be eligible|remains? (?:eligible|a household member))\b",
+    re.IGNORECASE,
+)
+APPLICATION_METHOD_QUESTION_RE = re.compile(
+    r"\b(how (?:do|can|may|should) (?:i|we|a person|an applicant) apply|"
+    r"ways? (?:to apply|an application may be made)|application methods?)\b",
+    re.IGNORECASE,
+)
+APPLICATION_METHOD_PASSAGE_RE = re.compile(
+    r"\ban application may be made\b",
+    re.IGNORECASE,
+)
+SERVICE_ACCESS_QUESTION_RE = re.compile(
+    r"\b(?:(?:where|how)\s+(?:can|do|may|should)\s+"
+    r"(?:(?:i|we|someone|an? (?:applicant|person)|applicants?|people)\s+)?"
+    r"(?:get|find|access|obtain)|who\s+(?:can|do|should|may)\s+"
+    r"(?:(?:i|we|someone|an? (?:applicant|person)|applicants?|people)\s+)?"
+    r"(?:ask|contact|call))\b",
+    re.IGNORECASE,
+)
+SERVICE_ACCESS_TOPIC_RE = re.compile(
+    r"\b(?:support|referral|services?|assistance|help)\b",
+    re.IGNORECASE,
+)
+SERVICE_ACCESS_PASSAGE_RE = re.compile(
+    r"\b(?:contact|call|in person|online|by (?:post|mail|telephone|phone|email)|"
+    r"through (?:the )?department(?:'s)? (?:online )?portal|at (?:any|a|the) "
+    r"(?:district )?office|an application may be made)\b",
+    re.IGNORECASE,
+)
 GENERIC_SUBJECT_TERMS = {
     "manual", "policy", "say", "state", "rule", "question", "exactly", "actually",
     "standard", "include", "including", "apply", "applicable", "hsp", "program",
@@ -37,9 +73,9 @@ INTENT_TERMS = {
 # appear in evidence.  Requiring a distinctive concept match prevents generic
 # modal language ("must", "may", "is") from supporting an unrelated answer.
 NON_SUBJECT_TERMS = GENERIC_SUBJECT_TERMS | INTENT_TERMS | {
-    "can", "cannot", "classify", "count", "cover", "do", "does", "get",
+    "can", "cannot", "classify", "count", "cover", "do", "does", "few", "get",
     "give", "happen", "include", "includ", "list", "make", "made", "may", "must", "occur", "provide",
-    "receive", "remain", "require", "required", "say", "shall", "should", "tell",
+    "help", "keep", "receive", "remain", "require", "required", "say", "shall", "should", "tell",
     "treat", "treated", "will", "would",
 }
 ROLE_TERMS = {"applicant", "department", "household", "member", "person", "recipient"}
@@ -103,10 +139,24 @@ class EvidenceAnalyzer:
             for chunk in corpus
             for token in tokenize(f"{chunk.section_title or ''} {chunk.text}", expand=False)
         }
+        self.query_vocabulary = (
+            self.corpus_vocabulary
+            | STOP_WORDS
+            | GENERIC_SUBJECT_TERMS
+            | INTENT_TERMS
+            | NON_SUBJECT_TERMS
+            | ROLE_TERMS
+        )
 
     def assess(self, question: str, results: list[RetrievedClause]) -> list[EvidenceAssessment]:
         question_terms = set(tokenize(question, expand=False))
         expanded_terms = set(tokenize(question, expand=True))
+        expanded_terms.update(
+            correction
+            for term in question_terms
+            if (correction := conservative_fuzzy_match(term, self.corpus_vocabulary)) is not None
+        )
+        lookup_clause_ids = requested_clause_lookup_ids(question)
         subject_terms = {
             term
             for term in question_terms
@@ -122,6 +172,20 @@ class EvidenceAnalyzer:
         concept_segments = self._concept_segments(question)
         for result in results:
             chunk = result.chunk
+            if chunk.clause_id in lookup_clause_ids:
+                assessments.append(
+                    EvidenceAssessment(
+                        chunk_id=chunk.chunk_id,
+                        support_type=SupportType.DIRECT,
+                        explanation="The user explicitly requested this existing official clause.",
+                        score=1.0,
+                        topic_coverage=1.0,
+                        answer_alignment=1.0,
+                        matched_terms=[chunk.clause_id],
+                        missing_terms=[],
+                    )
+                )
+                continue
             document_terms = set(
                 tokenize(
                     f"{chunk.part_title or ''} {chunk.section_title or ''} {chunk.text}",
@@ -203,8 +267,7 @@ class EvidenceAnalyzer:
             )
         return assessments
 
-    @classmethod
-    def _concept_segments(cls, question: str) -> list[list[set[str]]]:
+    def _concept_segments(self, question: str) -> list[list[set[str]]]:
         """Return synonym-aware concept groups for each material query aspect."""
 
         # Ignore a leading instruction-like sentence when a later sentence is
@@ -232,7 +295,21 @@ class EvidenceAnalyzer:
                 and term not in ROLE_TERMS
                 and not term.replace(".", "").isdigit()
             ]
-            groups = [set(tokenize(term, expand=True)) | {term} for term in material]
+            groups: list[set[str]] = []
+            for term in material:
+                correction = conservative_fuzzy_match(term, self.query_vocabulary)
+                if correction in (
+                    STOP_WORDS
+                    | GENERIC_SUBJECT_TERMS
+                    | INTENT_TERMS
+                    | NON_SUBJECT_TERMS
+                    | ROLE_TERMS
+                ):
+                    continue
+                group = set(tokenize(term, expand=True)) | {term}
+                if correction is not None:
+                    group.add(correction)
+                groups.append(group)
             if groups:
                 segments.append(groups)
         return segments
@@ -277,6 +354,12 @@ class EvidenceAnalyzer:
             and not re.search(r",|\band\b|\bincluding\b", question, re.IGNORECASE)
         )
         boolean_intent = bool(BOOLEAN_RE.search(question))
+        continuation_intent = bool(CONTINUATION_QUESTION_RE.search(question))
+        application_method_intent = bool(APPLICATION_METHOD_QUESTION_RE.search(question))
+        service_access_intent = bool(
+            SERVICE_ACCESS_QUESTION_RE.search(question)
+            and SERVICE_ACCESS_TOPIC_RE.search(question)
+        )
 
         if numeric_intent:
             if NUMERIC_PASSAGE_RE.search(text):
@@ -292,6 +375,12 @@ class EvidenceAnalyzer:
             return 0.35
         if classification_intent:
             return 1.0 if CLASSIFICATION_PASSAGE_RE.search(text) else 0.25
+        if application_method_intent:
+            return 1.0 if APPLICATION_METHOD_PASSAGE_RE.search(text) else 0.2
+        if service_access_intent:
+            return 1.0 if SERVICE_ACCESS_PASSAGE_RE.search(text) else 0.2
+        if continuation_intent:
+            return 1.0 if CONTINUATION_PASSAGE_RE.search(text) else 0.25
         if boolean_intent:
             return 1.0 if MODALITY_RE.search(text) else 0.35
         if EXCEPTION_QUESTION_RE.search(question) and EXCEPTION_PASSAGE_RE.search(text):

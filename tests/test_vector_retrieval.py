@@ -170,6 +170,42 @@ def test_bm25_preserves_exact_technical_term_recall(chunks) -> None:
     assert results[0][1] == pytest.approx(1.0)
 
 
+def test_bm25_conservatively_recovers_common_policy_typos(chunks) -> None:
+    results = BM25Index(chunks).search(
+        "whats the max resorce amount a houshold can hav?",
+        k=5,
+    )
+
+    assert results
+    assert results[0][0].clause_id == "2.4.1"
+
+
+def test_reranker_cannot_discard_the_top_lexical_anchor(
+    vector_store: VectorStore,
+    hashing_engine: EmbeddingEngine,
+) -> None:
+    class AdversarialReranker:
+        @staticmethod
+        def predict(pairs):
+            return np.array(
+                [-20.0 if "$4,000" in passage else 20.0 for _, passage in pairs]
+            )
+
+    retriever = Retriever(
+        hashing_engine,
+        vector_store,
+        use_hybrid=True,
+        use_reranker=False,
+        use_neighbors=False,
+        final_k=6,
+    )
+    retriever.reranker = AdversarialReranker()
+
+    results = retriever.retrieve("whats the max resorce amount a houshold can hav?")
+
+    assert "2.4.1" in {item.chunk.clause_id for item in results}
+
+
 def test_neighbor_expansion_keeps_standard_and_extended_absence_rules(
     vector_store: VectorStore,
     hashing_engine: EmbeddingEngine,
@@ -232,3 +268,35 @@ def test_indexed_citation_metadata_must_match_authoritative_source(
 
     with pytest.raises(IndexIntegrityError, match="citation metadata does not match"):
         GroundedAnswerPipeline._validate_chunk_metadata(corpus_path, tampered)
+
+
+def test_stale_reviewed_findings_are_rejected_after_policy_update(
+    tmp_path: Path,
+    pipeline_settings,
+    chunks,
+    findings_path: Path,
+) -> None:
+    stale_path = tmp_path / "stale-findings.json"
+    payload = json.loads(findings_path.read_text(encoding="utf-8"))
+    payload["consolidated_as_of"] = "2025-09-30"
+    stale_path.write_text(json.dumps(payload), encoding="utf-8")
+    settings = pipeline_settings.model_copy(update={"findings_path": stale_path})
+
+    with pytest.raises(IndexIntegrityError, match="stale for policy version"):
+        GroundedAnswerPipeline._validate_policy_companions(settings, chunks)
+
+
+def test_unknown_contact_source_clause_is_rejected(
+    tmp_path: Path,
+    pipeline_settings,
+    chunks,
+    contacts_path: Path,
+) -> None:
+    contacts_copy = tmp_path / "contacts.json"
+    payload = json.loads(contacts_path.read_text(encoding="utf-8"))
+    payload["default"]["source_clause_ids"].append("99.9.9")
+    contacts_copy.write_text(json.dumps(payload), encoding="utf-8")
+    settings = pipeline_settings.model_copy(update={"contacts_path": contacts_copy})
+
+    with pytest.raises(IndexIntegrityError, match="unknown clauses"):
+        GroundedAnswerPipeline._validate_policy_companions(settings, chunks)

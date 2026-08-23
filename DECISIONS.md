@@ -71,6 +71,12 @@ the baseline unusable.
 **Integrity rule:** The query backend and embedding model must match the index
 manifest. Switching backends requires re-ingestion.
 
+Exact official clause references are pinned into the final evidence set. BM25
+uses only unique, one-edit corpus-vocabulary corrections for words of at least
+five characters, and reranking cannot discard BM25's top lexical candidate.
+These are recall safeguards, not evidence authorization; every result still
+passes independent support assessment.
+
 ## 4. Evidence decision: relevance is not support
 
 **Decision:** Classify question-to-clause support separately from retrieval as
@@ -92,16 +98,18 @@ established.
 
 The decision engine returns `REFUSE` when any of the following applies:
 
-1. A reviewed manual gap matches the material question.
-2. The question asks for an individual determination or case-history explanation
+1. A standalone question supplies no policy anchor or depends on missing
+   conversational context, such as “How long do I have?” or “What about the exceptions?”
+2. A reviewed manual gap matches the material question.
+3. The question asks for an individual determination or case-history explanation
    that requires facts or records not supplied by the manual.
-3. No retrieved clause is classified as `DIRECT` support.
-4. Only related or partial evidence exists.
-5. A compound question has a material aspect that lacks direct support.
-6. The best direct support is below the configured refusal threshold.
-7. Provider output is malformed, changes the trusted decision, selects an
-   unretrieved source ID, or fails claim/citation validation.
-8. The index and current corpus or selected embedding backend do not match; in
+4. No retrieved clause is classified as `DIRECT` support.
+5. Only related or partial evidence exists.
+6. A compound question has a material aspect that lacks direct support.
+7. The best direct support is below the configured refusal threshold.
+8. Neither optional model phrasing nor the trusted-source fallback can produce
+   a valid answer contract.
+9. The index and current corpus, reviewed metadata, or selected embedding backend do not match; in
    this case the command fails safely and asks for re-ingestion.
 
 The deterministic refusal wording states that the manual does not clearly settle
@@ -207,7 +215,11 @@ It uses selected source text and requires no API key.
 Gemini is an optional implementation of the `LLMProvider` interface. It can
 rephrase only an already-authorized `ANSWER`; it cannot override the decision
 engine. Structured provider output is validated with Pydantic and source-ID
-allowlisting. Any provider or validation exception produces a safe refusal.
+allowlisting. Pure official-clause lookups are rendered verbatim because the
+provider intentionally receives only opaque IDs. Any malformed, unsupported,
+or invalid provider output is discarded and replaced with the already validated
+exact source text. If that fallback cannot satisfy the answer contract, the
+pipeline refuses.
 
 **Trade-off:** Deterministic answers are less conversational, but they are stable,
 inspectable, private by default, and remain available when an external service is
@@ -233,11 +245,38 @@ text as untrusted data.
 thresholds, and provider settings in the validated `Settings` model. Precedence
 is explicit CLI override, then environment/`.env`, then safe defaults.
 
+The parser converts any valid English consolidated date to ISO form rather than
+hard-coding one release. Reviewed findings and escalation metadata must declare
+the same document and consolidated date and may cite only clauses in the active
+corpus. Streamlit cache identity includes those files, the corpus, and the index
+manifest so a quarterly update invalidates the in-memory pipeline.
+
 The generated index and processed chunks are reproducible artifacts and are not
 committed. The source corpus, reviewed findings, escalation descriptions,
 evaluation labels, and documentation are committed.
 
-## 13. Key trade-offs
+## 13. Observability and tracing decision
+
+**Decision:** LangSmith tracing is optional, uses the standalone SDK rather
+than LangChain, and records only a strict allowlist of content-free diagnostic
+fields.
+
+The root query run and its retrieval, evidence, decision, and answer-construction
+children record timing, state, counts, evidence levels, and clause IDs. They do
+not record raw questions, generated answers, policy excerpts, decision reasons,
+next steps, or full debug traces. Runtime metadata is omitted and all client
+inputs, outputs, and metadata pass through the same allowlist before upload.
+
+`LANGSMITH_TRACING=false` is the safe default. Enabling it requires the optional
+pinned SDK and either `LANGSMITH_API_KEY` or the legacy `LANGCHAIN_API_KEY`
+fallback. Observability failures must not turn a safe policy answer into an
+application failure.
+
+**Trade-off:** Content-redacted traces are less useful for semantic debugging,
+but retain operational latency and state-machine visibility without copying
+case questions or policy text to another service.
+
+## 14. Key trade-offs
 
 - **Precision over recall:** unanswered questions are acceptable; unsupported
   answers are not.
@@ -252,7 +291,7 @@ evaluation labels, and documentation are committed.
 - **Curated findings over silent normalization:** reviewed source problems are
   surfaced, not repaired.
 
-## 14. Known failure modes
+## 15. Known failure modes
 
 1. Novel paraphrases or vocabulary outside the manual can cause retrieval misses
    or false refusals.

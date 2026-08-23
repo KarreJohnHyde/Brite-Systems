@@ -19,6 +19,7 @@ from src.models import (
     PolicyAnswer,
     PolicyChunk,
 )
+from src.observability import PipelineTracer
 from src.parser import (
     build_corpus_report,
     find_chunks,
@@ -67,10 +68,12 @@ class GroundedAnswerPipeline:
         store: VectorStore,
         *,
         llm_provider=None,
+        tracer=None,
     ) -> None:
         self.settings = settings
         self.embedding_engine = embedding_engine
         self.store = store
+        self._validate_policy_companions(settings, store.chunks)
         self.retriever = Retriever(
             embedding_engine,
             store,
@@ -101,6 +104,7 @@ class GroundedAnswerPipeline:
             llm_provider=llm_provider,
             enable_claim_validation=settings.enable_claim_validation,
         )
+        self.tracer = tracer or PipelineTracer(settings)
 
     @classmethod
     def load(cls, settings: Settings) -> GroundedAnswerPipeline:
@@ -144,6 +148,7 @@ class GroundedAnswerPipeline:
             provider = GeminiProvider(
                 api_key=settings.gemini_api_key,
                 model=settings.gemini_model,
+                thinking_level=settings.gemini_thinking_level,
             )
         return cls(settings, engine, store, llm_provider=provider)
 
@@ -173,51 +178,185 @@ class GroundedAnswerPipeline:
                     "Indexed citation metadata does not match the source corpus; run `python main.py ingest`."
                 )
 
+    @staticmethod
+    def _validate_policy_companions(settings: Settings, chunks: list[PolicyChunk]) -> None:
+        """Reject stale reviewed findings or escalation metadata after an update."""
+
+        if not chunks:
+            raise IndexIntegrityError("The policy index contains no trusted clauses")
+
+        def read_object(path: Path, label: str) -> dict:
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise IndexIntegrityError(f"{label} metadata is unreadable: {path}") from exc
+            if not isinstance(payload, dict):
+                raise IndexIntegrityError(f"{label} metadata must contain a JSON object: {path}")
+            return payload
+
+        expected_document = chunks[0].document_id
+        expected_date = chunks[0].effective_date
+        known_clause_ids = {chunk.clause_id for chunk in chunks if chunk.clause_id}
+        findings = read_object(settings.findings_path, "Policy findings")
+        contacts = read_object(settings.contacts_path, "Escalation contacts")
+
+        for label, payload in (("Policy findings", findings), ("Escalation contacts", contacts)):
+            if payload.get("source_verified") is not True:
+                raise IndexIntegrityError(f"{label} must be explicitly source verified")
+            if payload.get("document_id") != expected_document:
+                raise IndexIntegrityError(
+                    f"{label} targets a different policy document; review it before serving answers"
+                )
+            if payload.get("consolidated_as_of") != expected_date:
+                raise IndexIntegrityError(
+                    f"{label} is stale for policy version {expected_date}; review it before serving answers"
+                )
+
+        referenced: set[str] = set()
+        for group in ("conflicts", "gaps"):
+            for item in findings.get(group, []):
+                if not isinstance(item, dict) or item.get("source_verified") is not True:
+                    raise IndexIntegrityError(f"Every reviewed {group} item must be source verified")
+                referenced.update(str(value) for value in item.get("clause_ids", []))
+                referenced.update(str(value) for value in item.get("context_clause_ids", []))
+        for key in ("default", "eligibility", "appeals", "conflict"):
+            item = contacts.get(key)
+            if not isinstance(item, dict) or not str(item.get("next_step", "")).strip():
+                raise IndexIntegrityError(f"Escalation contacts is missing a valid {key!r} route")
+            referenced.update(str(value) for value in item.get("source_clause_ids", []))
+
+        unknown = sorted(referenced - known_clause_ids)
+        if unknown:
+            raise IndexIntegrityError(
+                "Reviewed policy metadata cites unknown clauses: " + ", ".join(unknown)
+            )
+
     def ask(self, question: str, *, include_trace: bool = False) -> PolicyAnswer:
         normalized = question.strip()
         if not normalized:
             raise ValueError("Question must not be empty")
-        retrieved = self.retriever.retrieve(normalized)
-        evidence = self.evidence_analyzer.assess(normalized, retrieved)
-        trace = self.decision_engine.decide(normalized, retrieved, evidence)
-        try:
-            answer = self.answer_builder.build(trace, include_trace=include_trace)
-            citation_status = "valid"
-        except Exception as exc:
-            # Generation/provider/citation failures can never fall through to an
-            # unvalidated answer. Convert them into an explicit safe refusal.
-            safe_trace = trace.model_copy(
-                update={
-                    "decision": Decision.REFUSE,
-                    "decision_reason": (
-                        "A generated answer failed the citation or provider safety check "
-                        f"({type(exc).__name__}); no policy answer was shown."
+        model = self.settings.gemini_model if self.settings.llm_provider == "gemini" else "deterministic"
+        with self.tracer.query(
+            normalized,
+            include_debug_trace=include_trace,
+            embedding_backend=self.settings.embedding_backend,
+            answer_provider=self.settings.llm_provider,
+            model=model,
+        ) as query_span:
+            with self.tracer.span("retrieve-policy-evidence", "retriever") as retrieval_span:
+                retrieved = self.retriever.retrieve(normalized)
+                retrieval_span.end(
+                    {
+                        "result_count": len(retrieved),
+                        "clause_ids": [
+                            item.chunk.clause_id or item.chunk.chunk_id for item in retrieved
+                        ],
+                    }
+                )
+
+            with self.tracer.span("assess-evidence", "tool") as evidence_span:
+                evidence = self.evidence_analyzer.assess(normalized, retrieved)
+                support_counts: dict[str, int] = {}
+                for assessment in evidence:
+                    key = assessment.support_type.value
+                    support_counts[key] = support_counts.get(key, 0) + 1
+                evidence_span.end({"support_counts": support_counts})
+
+            with self.tracer.span("decide-answer-state", "chain") as decision_span:
+                trace = self.decision_engine.decide(normalized, retrieved, evidence)
+                decision_span.end(
+                    {
+                        "decision": trace.decision.value,
+                        "conflict_count": len(trace.conflicts),
+                    }
+                )
+
+            generation_error: Exception | None = None
+            run_type = "llm" if self.settings.llm_provider == "gemini" else "chain"
+            with self.tracer.span(
+                "build-validated-answer",
+                run_type,
+                {
+                    "answer_provider": self.settings.llm_provider,
+                    "model": model,
+                },
+            ) as generation_span:
+                try:
+                    answer = self.answer_builder.build(trace, include_trace=include_trace)
+                    citation_status = "valid"
+                    generation_span.end(
+                        {
+                            "status": "valid",
+                            "decision": answer.decision.value,
+                            "evidence_level": answer.evidence_level.value,
+                            "citation_count": len(answer.citations),
+                            "citation_clause_ids": [
+                                citation.clause_id or citation.chunk_id
+                                for citation in answer.citations
+                            ],
+                        }
+                    )
+                except Exception as exc:
+                    generation_error = exc
+                    citation_status = "rejected"
+                    generation_span.end(
+                        {
+                            "status": "rejected",
+                            "error_type": type(exc).__name__,
+                            "citation_validation": citation_status,
+                        }
+                    )
+
+            if generation_error is not None:
+                # Generation/provider/citation failures can never fall through to an
+                # unvalidated answer. Convert them into an explicit safe refusal.
+                safe_trace = trace.model_copy(
+                    update={
+                        "decision": Decision.REFUSE,
+                        "decision_reason": (
+                            "A generated answer failed the citation or provider safety check "
+                            f"({type(generation_error).__name__}); no policy answer was shown."
+                        ),
+                    }
+                )
+                contacts = load_contacts(self.settings.contacts_path)
+                answer = PolicyAnswer(
+                    decision=Decision.REFUSE,
+                    answer=(
+                        "I don't know based on the current policy manual. "
+                        "A safe, citation-validated answer could not be produced."
                     ),
+                    evidence_level=EvidenceLevel.LOW,
+                    reason=safe_trace.decision_reason,
+                    next_step=select_next_step(normalized, contacts),
+                    trace=safe_trace if include_trace else None,
+                )
+
+            LOGGER.info(
+                "query=%r retrieved=%s decision=%s reason=%r citation_validation=%s",
+                normalized,
+                [item.chunk.chunk_id for item in retrieved],
+                answer.decision.value,
+                answer.reason,
+                citation_status,
+            )
+            query_span.end(
+                {
+                    "decision": answer.decision.value,
+                    "evidence_level": answer.evidence_level.value,
+                    "citation_count": len(answer.citations),
+                    "citation_clause_ids": [
+                        citation.clause_id or citation.chunk_id for citation in answer.citations
+                    ],
+                    "citation_validation": citation_status,
                 }
             )
-            contacts = load_contacts(self.settings.contacts_path)
-            answer = PolicyAnswer(
-                decision=Decision.REFUSE,
-                answer=(
-                    "I don't know based on the current policy manual. "
-                    "A safe, citation-validated answer could not be produced."
-                ),
-                evidence_level=EvidenceLevel.LOW,
-                reason=safe_trace.decision_reason,
-                next_step=select_next_step(normalized, contacts),
-                trace=safe_trace if include_trace else None,
-            )
-            citation_status = "rejected"
+            return answer
 
-        LOGGER.info(
-            "query=%r retrieved=%s decision=%s reason=%r citation_validation=%s",
-            normalized,
-            [item.chunk.chunk_id for item in retrieved],
-            answer.decision.value,
-            answer.reason,
-            citation_status,
-        )
-        return answer
+    def flush_traces(self, timeout: float = 10.0) -> None:
+        """Flush pending optional observability writes."""
+
+        self.tracer.flush(timeout=timeout)
 
     def source(self, source_id: str) -> list[PolicyChunk]:
         return find_chunks(self.store.chunks, source_id)

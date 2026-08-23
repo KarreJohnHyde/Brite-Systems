@@ -7,6 +7,7 @@ import json
 import re
 from collections import defaultdict
 from collections.abc import Iterable
+from datetime import datetime
 from pathlib import Path
 
 from src.models import IngestionReport, PolicyChunk
@@ -49,6 +50,15 @@ def _line_byte_offsets(lines: list[str]) -> list[int]:
     return offsets
 
 
+def _effective_date(version: str | None) -> str | None:
+    if version is None:
+        return None
+    try:
+        return datetime.strptime(version, "%d %B %Y").date().isoformat()
+    except ValueError as exc:
+        raise CorpusParseError(f"Invalid consolidated policy date: {version}") from exc
+
+
 def parse_policy_manual(filepath: str | Path) -> list[PolicyChunk]:
     """Parse official `X.Y.Z` provisions without inventing page metadata.
 
@@ -73,7 +83,7 @@ def parse_policy_manual(filepath: str | Path) -> list[PolicyChunk]:
     byte_offsets = _line_byte_offsets(lines)
     version_match = VERSION_RE.search(source)
     document_version = version_match.group(1) if version_match else None
-    effective_date = "2025-12-31" if document_version == "31 December 2025" else None
+    effective_date = _effective_date(document_version)
     doc_id = _document_id(path)
 
     chunks: list[PolicyChunk] = []

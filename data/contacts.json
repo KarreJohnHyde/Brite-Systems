@@ -1,4 +1,7 @@
 {
+  "document_id": "calder-hsp-policy-manual",
+  "consolidated_as_of": "2025-12-31",
+  "source_verified": true,
   "default": {
     "next_step": "Ask a Department caseworker at one of the four district offices for an official interpretation.",
     "source_clause_ids": [

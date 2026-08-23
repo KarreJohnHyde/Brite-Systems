@@ -199,6 +199,28 @@
       ],
       "explanation": "Clause 7.3.3 requires housing assistance to reduce the needs figure only to the extent that it covers costs included in that figure, but clause 7.2.1 states only aggregate amounts and never identifies the included cost components.",
       "source_verified": true
+    },
+    {
+      "id": "GAP-007",
+      "status": "CONFIRMED",
+      "clause_ids": [
+        "1.1.1",
+        "1.1.2"
+      ],
+      "topic_terms": [
+        "support services",
+        "referral assistance",
+        "where to get support",
+        "how to access services",
+        "who to contact for help"
+      ],
+      "trigger_patterns": [
+        "(?:where|how).*(?:get|find|access|obtain).*(?:support|referral|assistance|services?)",
+        "(?:support|referral|assistance|services?).*(?:where|how).*(?:get|find|access|obtain)",
+        "who.*(?:ask|contact|call).*(?:support|referral|assistance|services?)"
+      ],
+      "explanation": "Clause 1.1.1 promises access to associated support services and clause 1.1.2 identifies the administering offices, but the manual does not say where, how, or from whom a person can obtain resource or referral assistance.",
+      "source_verified": true
     }
   ]
 }

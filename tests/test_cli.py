@@ -35,6 +35,7 @@ def cli_environment(
     monkeypatch.setenv("EMBEDDING_DIMENSION", "128")
     monkeypatch.setenv("ENABLE_RERANKING", "false")
     monkeypatch.setenv("LLM_PROVIDER", "deterministic")
+    monkeypatch.setenv("LANGSMITH_TRACING", "false")
     return paths
 
 
@@ -50,6 +51,12 @@ def test_cli_parser_exposes_required_commands() -> None:
         (["calibrate"], "calibrate"),
     ]:
         assert parser.parse_args(argv).command == command
+
+    custom_evaluation = parser.parse_args(
+        ["evaluate", "--questions", "evaluation/adversarial_questions.json", "--output-dir", "out"]
+    )
+    assert custom_evaluation.questions == Path("evaluation/adversarial_questions.json")
+    assert custom_evaluation.output_dir == Path("out")
 
 
 def test_cli_corpus_report_is_valid_json(corpus_path: Path, capsys) -> None:

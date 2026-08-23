@@ -11,6 +11,7 @@ from typing import Any
 from src.embeddings import EmbeddingEngine
 from src.lexical import BM25Index, tokenize
 from src.models import PolicyChunk, RetrievedClause
+from src.query_analysis import referenced_policy_ids
 from src.vector_store import VectorStore
 
 NUMERIC_QUESTION_RE = re.compile(
@@ -25,9 +26,6 @@ LIST_QUESTION_RE = re.compile(
     r"\b(which|what (?:are|is|income|resources?|conditions?|evidence|ways?|documents?|types?|kinds?))\b",
     re.IGNORECASE,
 )
-CLAUSE_ID_RE = re.compile(r"§?(\d+\.\d+(?:\.\d+)?)")
-
-
 class Retriever:
     """Combine dense and BM25 retrieval while preserving independent scores."""
 
@@ -132,6 +130,8 @@ class Retriever:
             fused = self._rerank(question, fused[: self.rerank_k]) + fused[self.rerank_k :]
             fused.sort(key=lambda result: result.ranking_score, reverse=True)
 
+        fused = self._retain_lexical_anchor(fused)
+        fused = self._pin_exact_references(question, fused)
         primary = fused[: self.final_k]
         fused_candidates = {item.chunk.chunk_id: item for item in fused}
         expanded = self._expand_context(question, primary, fused_candidates) if self.use_neighbors else primary
@@ -175,7 +175,7 @@ class Retriever:
     @staticmethod
     def _intent_boost(question: str, chunk: PolicyChunk) -> float:
         boost = 0.0
-        exact_refs = {match.group(1) for match in CLAUSE_ID_RE.finditer(question)}
+        exact_refs = set(referenced_policy_ids(question))
         if chunk.clause_id in exact_refs or chunk.section_id in exact_refs:
             boost += 0.35
         if NUMERIC_QUESTION_RE.search(question) and NUMERIC_PASSAGE_RE.search(chunk.text):
@@ -189,6 +189,53 @@ class Retriever:
         if "appeal" in question_terms and (chunk.section_title or "").lower() == "right of appeal":
             boost += 0.18
         return boost
+
+    def _pin_exact_references(
+        self,
+        question: str,
+        candidates: list[RetrievedClause],
+    ) -> list[RetrievedClause]:
+        """Keep existing official clause references in the final evidence set."""
+
+        references = referenced_policy_ids(question)
+        if not references:
+            return candidates
+        by_chunk = {item.chunk.chunk_id: item for item in candidates}
+        pinned: list[RetrievedClause] = []
+        pinned_ids: set[str] = set()
+        for reference in references:
+            chunk = self._by_clause.get(reference)
+            if chunk is None or chunk.chunk_id in pinned_ids:
+                continue
+            existing = by_chunk.get(chunk.chunk_id, RetrievedClause(chunk=chunk))
+            pinned.append(
+                existing.model_copy(
+                    update={
+                        "fused_score": 1.0,
+                        "reranker_score": None,
+                        "neighbor_of": f"exact:{reference}",
+                    }
+                )
+            )
+            pinned_ids.add(chunk.chunk_id)
+        if not pinned:
+            return candidates
+        return pinned + [item for item in candidates if item.chunk.chunk_id not in pinned_ids]
+
+    def _retain_lexical_anchor(
+        self,
+        candidates: list[RetrievedClause],
+    ) -> list[RetrievedClause]:
+        """Do not let reranking discard BM25's best exact-term candidate."""
+
+        if not self.use_hybrid or len(candidates) <= self.final_k:
+            return candidates
+        anchor = next((item for item in candidates if item.lexical_rank == 1), None)
+        if anchor is None or anchor in candidates[: self.final_k]:
+            return candidates
+        head = candidates[: self.final_k - 1] + [anchor]
+        head_ids = {item.chunk.chunk_id for item in head}
+        return head + [item for item in candidates if item.chunk.chunk_id not in head_ids]
 
     def _rerank(self, question: str, candidates: list[RetrievedClause]) -> list[RetrievedClause]:
         pairs = [

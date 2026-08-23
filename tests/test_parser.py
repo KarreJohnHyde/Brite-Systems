@@ -113,3 +113,18 @@ def test_missing_clause_structure_is_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(CorpusParseError, match="No official clauses"):
         parse_policy_manual(source)
+
+
+def test_quarterly_consolidation_date_is_parsed_without_hard_coding(tmp_path: Path) -> None:
+    source = tmp_path / "quarterly-policy.md"
+    source.write_text(
+        "Consolidated text as at 30 June 2026\n\n"
+        "# Part 1 — Test\n\n## 1.1 Rules\n\n"
+        "**1.1.1** The current quarterly rule.\n",
+        encoding="utf-8",
+    )
+
+    chunks = parse_policy_manual(source)
+
+    assert chunks[0].document_version == "30 June 2026"
+    assert chunks[0].effective_date == "2026-06-30"

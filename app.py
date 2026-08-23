@@ -7,6 +7,7 @@ defaults; external model use must be selected explicitly.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
 from typing import Any
@@ -21,7 +22,7 @@ LOGGER = logging.getLogger("grounded_answer.streamlit")
 
 st.set_page_config(
     page_title="The Grounded Answer",
-    page_icon="⚖️",
+    page_icon=":material/balance:",
     layout="centered",
 )
 
@@ -44,7 +45,12 @@ def _render_answer(payload: dict[str, Any]) -> None:
     else:
         st.error("REFUSE — the manual does not safely settle the question")
 
-    st.markdown(str(payload.get("answer", "No answer was produced.")))
+    # Streamlit treats pairs of dollar signs as inline math delimiters. Policy
+    # amounts must remain ordinary visible currency in the rendered answer.
+    rendered_answer = str(payload.get("answer", "No answer was produced.")).replace(
+        "$", r"\$"
+    )
+    st.markdown(rendered_answer)
 
     reason = payload.get("reason")
     if reason:
@@ -76,8 +82,32 @@ def _render_answer(payload: dict[str, Any]) -> None:
         st.caption(f"Evidence level: {evidence}")
 
 
-@st.cache_resource(show_spinner="Loading the policy index…")
-def _load_pipeline(embedding_backend: str, provider: str) -> GroundedAnswerPipeline:
+def _artifact_revision(settings: Settings) -> str:
+    """Fingerprint every file that can change the answer contract."""
+
+    digest = hashlib.sha256()
+    paths = (
+        settings.corpus_path,
+        settings.index_dir / "manifest.json",
+        settings.findings_path,
+        settings.contacts_path,
+    )
+    for path in paths:
+        digest.update(str(path.resolve()).encode("utf-8"))
+        try:
+            digest.update(path.read_bytes())
+        except OSError:
+            digest.update(b"<missing>")
+    return digest.hexdigest()
+
+
+@st.cache_resource(show_spinner="Loading the policy index…", max_entries=8)
+def _load_pipeline(
+    embedding_backend: str,
+    provider: str,
+    artifact_revision: str,
+) -> GroundedAnswerPipeline:
+    del artifact_revision  # The value is intentionally part of the cache key.
     settings = Settings.from_env(
         embedding_backend=embedding_backend,
         llm_provider=provider,
@@ -85,7 +115,7 @@ def _load_pipeline(embedding_backend: str, provider: str) -> GroundedAnswerPipel
     return GroundedAnswerPipeline.load(settings)
 
 
-st.title("⚖️ The Grounded Answer")
+st.title("The Grounded Answer")
 st.subheader("Calder County HSP policy evidence assistant")
 st.markdown(
     "This assistant uses only the supplied policy manual. It chooses **ANSWER**, "
@@ -116,17 +146,31 @@ with st.sidebar:
         index=provider_options.index(defaults.llm_provider),
         help="Deterministic keeps all query processing local. Gemini sends selected excerpts to the configured API.",
     )
-    st.caption(
-        "Reranking is configured with ENABLE_RERANKING in .env and is disabled by default. "
-        "Restart Streamlit after editing .env. The selected embedding backend must match "
-        "the backend used for ingestion."
+    reranking_slot = st.empty()
+    reranking_slot.caption(
+        "Reranking is configured; runtime availability will be checked while the index loads."
+        if defaults.enable_reranking
+        else "Reranking is disabled through ENABLE_RERANKING."
     )
-    if st.button("Clear conversation"):
+    if defaults.langsmith_tracing:
+        st.caption(
+            f"LangSmith tracing is on for project `{defaults.langsmith_project}`. "
+            "Questions, answers, reasons, next steps, and policy text are not recorded."
+        )
+    if st.button("Clear conversation", icon=":material/delete_sweep:"):
         st.session_state.messages = []
         st.rerun()
 
 try:
-    pipeline = _load_pipeline(embedding_backend, provider)
+    runtime_settings = Settings.from_env(
+        embedding_backend=embedding_backend,
+        llm_provider=provider,
+    )
+    pipeline = _load_pipeline(
+        embedding_backend,
+        provider,
+        _artifact_revision(runtime_settings),
+    )
 except (FileNotFoundError, ImportError, RuntimeError, ValueError) as exc:
     st.error(str(exc))
     st.code(
@@ -136,6 +180,26 @@ except (FileNotFoundError, ImportError, RuntimeError, ValueError) as exc:
     if provider == "gemini":
         st.caption("Gemini additionally requires GEMINI_API_KEY in .env or the process environment.")
     st.stop()
+
+active_manual = pipeline.store.chunks[0]
+if not runtime_settings.enable_reranking:
+    reranking_runtime = "Reranking is disabled through ENABLE_RERANKING."
+elif pipeline.retriever.reranker is None or pipeline.retriever.reranker_error:
+    reranking_runtime = (
+        "Reranking is configured but unavailable; hybrid vector/BM25 retrieval remains active."
+    )
+else:
+    reranking_runtime = "Reranking is loaded and active."
+reranking_slot.caption(
+    reranking_runtime
+    + " Restart Streamlit after editing .env. The selected embedding backend must match "
+    "the backend used for ingestion."
+)
+version = active_manual.document_version or "version not stated"
+st.caption(
+    f"Active manual: {active_manual.document_name} · consolidated {version} · "
+    f"{len(pipeline.store.chunks)} official clauses"
+)
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -147,7 +211,11 @@ for message in st.session_state.messages:
         else:
             _render_answer(message["payload"])
 
-if prompt := st.chat_input("Ask a policy question…"):
+if prompt := st.chat_input(
+    "Ask a complete, standalone policy question…",
+    key="policy_question",
+    submit_mode="disable",
+):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -157,6 +225,11 @@ if prompt := st.chat_input("Ask a policy question…"):
             started = time.perf_counter()
             with st.spinner("Retrieving and checking policy evidence…"):
                 answer = pipeline.ask(prompt)
+            if pipeline.retriever.reranker_error:
+                reranking_slot.caption(
+                    "Reranking encountered a runtime error; hybrid vector/BM25 retrieval remains active. "
+                    "Restart Streamlit after editing .env."
+                )
             elapsed = time.perf_counter() - started
             payload = answer.model_dump(mode="json")
             _render_answer(payload)

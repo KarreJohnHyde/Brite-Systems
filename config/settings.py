@@ -50,7 +50,13 @@ class Settings(BaseModel):
 
     llm_provider: Literal["deterministic", "gemini"] = "deterministic"
     gemini_model: str = "gemini-3.6-flash"
+    gemini_thinking_level: Literal["minimal", "low", "medium", "high"] = "minimal"
     gemini_api_key: str | None = None
+    langsmith_tracing: bool = False
+    langsmith_api_key: str | None = None
+    langsmith_project: str = "grounded-answer"
+    langsmith_endpoint: str = "https://api.smith.langchain.com"
+    langsmith_workspace_id: str | None = None
     log_level: str = "WARNING"
 
     @field_validator(
@@ -115,7 +121,19 @@ class Settings(BaseModel):
             "direct_coverage_threshold": float(os.getenv("DIRECT_COVERAGE_THRESHOLD", "0.34")),
             "llm_provider": llm_provider or os.getenv("LLM_PROVIDER", "deterministic"),
             "gemini_model": os.getenv("GEMINI_MODEL", "gemini-3.6-flash"),
+            "gemini_thinking_level": os.getenv("GEMINI_THINKING_LEVEL", "minimal"),
             "gemini_api_key": os.getenv("GEMINI_API_KEY") or None,
+            "langsmith_tracing": _env_bool("LANGSMITH_TRACING", False),
+            "langsmith_api_key": (
+                os.getenv("LANGSMITH_API_KEY")
+                or os.getenv("LANGCHAIN_API_KEY")
+                or None
+            ),
+            "langsmith_project": os.getenv("LANGSMITH_PROJECT", "grounded-answer"),
+            "langsmith_endpoint": os.getenv(
+                "LANGSMITH_ENDPOINT", "https://api.smith.langchain.com"
+            ),
+            "langsmith_workspace_id": os.getenv("LANGSMITH_WORKSPACE_ID") or None,
             "log_level": os.getenv("LOG_LEVEL", "WARNING").upper(),
         }
         return cls.model_validate(data)

@@ -159,6 +159,10 @@ def test_refusal_is_deterministic_and_next_step_is_topic_specific(
     assert "Appeals Panel" in select_next_step(trace.question, contacts)
     assert "supervisor" in select_next_step("Do I qualify based on income?", contacts)
     assert "district offices" in select_next_step("Who should clarify this?", contacts)
+    assert "district offices" in select_next_step(
+        "Where can I get resource and referral assistance?",
+        contacts,
+    )
     assert "555" not in str(contacts)
 
 

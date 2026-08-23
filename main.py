@@ -61,11 +61,14 @@ def cmd_ask(args: argparse.Namespace) -> int:
     settings = _settings(args)
     _configure_logging(settings, args.debug)
     pipeline = GroundedAnswerPipeline.load(settings)
-    answer = pipeline.ask(args.question, include_trace=args.debug)
-    if args.json:
-        print(answer.model_dump_json(indent=2))
-    else:
-        print_policy_answer(answer, debug=args.debug)
+    try:
+        answer = pipeline.ask(args.question, include_trace=args.debug)
+        if args.json:
+            print(answer.model_dump_json(indent=2))
+        else:
+            print_policy_answer(answer, debug=args.debug)
+    finally:
+        pipeline.flush_traces()
     return 0
 
 
@@ -136,7 +139,12 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
     _configure_logging(settings)
     from evaluation.evaluate import run_evaluation
 
-    report = run_evaluation(settings=settings, quiet=args.quiet)
+    report = run_evaluation(
+        settings=settings,
+        quiet=args.quiet,
+        questions_path=args.questions,
+        output_dir=args.output_dir,
+    )
     return 0 if report["failures"] == 0 else 1
 
 
@@ -155,18 +163,21 @@ def cmd_interactive(args: argparse.Namespace) -> int:
     pipeline = GroundedAnswerPipeline.load(settings)
     print("THE GROUNDED ANSWER")
     print("Policy-grounded decision support. Type 'quit' to exit.")
-    while True:
-        try:
-            question = input("\nQuestion: ").strip()
-        except (EOFError, KeyboardInterrupt):
+    try:
+        while True:
+            try:
+                question = input("\nQuestion: ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                return 0
+            if question.lower() in {"quit", "exit", "q"}:
+                return 0
+            if not question:
+                continue
             print()
-            return 0
-        if question.lower() in {"quit", "exit", "q"}:
-            return 0
-        if not question:
-            continue
-        print()
-        print_policy_answer(pipeline.ask(question))
+            print_policy_answer(pipeline.ask(question))
+    finally:
+        pipeline.flush_traces()
 
 
 @lru_cache(maxsize=4)
@@ -222,6 +233,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     evaluate = commands.add_parser("evaluate", help="Run the source-derived evaluation set")
     evaluate.add_argument("--quiet", action="store_true", help="Print only summary and failures")
+    evaluate.add_argument("--questions", type=Path, help="Optional labeled question-set JSON")
+    evaluate.add_argument("--output-dir", type=Path, help="Directory for JSON and Markdown results")
     evaluate.add_argument("--embedding-backend", choices=("hashing", "sentence-transformers"))
     evaluate.set_defaults(func=cmd_evaluate)
 

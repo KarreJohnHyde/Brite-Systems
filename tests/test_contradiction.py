@@ -75,6 +75,22 @@ def test_28_to_90_day_extension_is_not_a_conflict(chunks, make_result) -> None:
     assert findings == []
 
 
+def test_unasked_neighbor_deadlines_do_not_create_a_numeric_conflict(
+    chunks,
+    make_result,
+) -> None:
+    wanted = {"4.3.2", "9.1.4"}
+    retrieved = [make_result(chunk) for chunk in chunks if chunk.clause_id in wanted]
+
+    findings = ContradictionDetector().detect(
+        "Is an overpayment caused solely by Department error recoverable?",
+        retrieved,
+        [direct(item) for item in retrieved],
+    )
+
+    assert findings == []
+
+
 def test_opposite_eligibility_polarity_is_detected(make_chunk, make_result) -> None:
     eligible = make_chunk(
         chunk_id="eligible",

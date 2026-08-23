@@ -42,7 +42,10 @@ class EmbeddingEngine:
                 from sentence_transformers import SentenceTransformer
 
                 self._model = SentenceTransformer(model_name)
-                self.dimension = int(self._model.get_sentence_embedding_dimension())
+                dimension_getter = getattr(self._model, "get_embedding_dimension", None)
+                if dimension_getter is None:
+                    dimension_getter = self._model.get_sentence_embedding_dimension
+                self.dimension = int(dimension_getter())
             except Exception as exc:
                 raise EmbeddingUnavailableError(
                     f"Could not load sentence-transformers model {model_name!r}. "

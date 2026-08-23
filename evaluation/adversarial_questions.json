@@ -1,0 +1,167 @@
+[
+  {
+    "id": "A01",
+    "question": "whats the max resorce amount a houshold can hav?",
+    "expected_decision": "ANSWER",
+    "expected_clause_ids": ["2.4.1"],
+    "expected_evidence_clause_ids": ["2.4.1"],
+    "expected_facts": ["$4,000", "exceed"],
+    "forbidden_claims": ["$40,000", "at or above $4,000"],
+    "category": "TYPO_TOLERANCE",
+    "notes": "Two conservative one-edit corrections should recover the exact resource rule without broad query rewriting."
+  },
+  {
+    "id": "A02",
+    "question": "What does clause 2.4.1 say?",
+    "expected_decision": "ANSWER",
+    "expected_clause_ids": ["2.4.1"],
+    "expected_evidence_clause_ids": ["2.4.1"],
+    "expected_facts": ["$4,000", "countable resources"],
+    "forbidden_claims": ["clause 99.9.9"],
+    "category": "EXACT_CLAUSE_LOOKUP",
+    "notes": "A pure lookup of an existing official clause is a supported source-reading task."
+  },
+  {
+    "id": "A03",
+    "question": "Can I keep getting help while I'm away for a few weeks?",
+    "expected_decision": "ANSWER",
+    "expected_clause_ids": ["3.2.1"],
+    "expected_evidence_clause_ids": ["3.2.1"],
+    "expected_facts": ["28 days", "continues to satisfy"],
+    "forbidden_claims": ["benefits always continue indefinitely"],
+    "category": "COLLOQUIAL_PARAPHRASE",
+    "notes": "Colloquial wording must map to the standard temporary-absence rule without inventing an individual decision."
+  },
+  {
+    "id": "A04",
+    "question": "How long do I have?",
+    "expected_decision": "REFUSE",
+    "expected_clause_ids": [],
+    "expected_evidence_clause_ids": [],
+    "expected_facts": [],
+    "forbidden_claims": ["4 weeks", "8 weeks", "30 days"],
+    "category": "UNDERSPECIFIED",
+    "notes": "The query names no deadline, process, or policy topic and must not inherit a random retrieved subject."
+  },
+  {
+    "id": "A05",
+    "question": "What about the exceptions?",
+    "expected_decision": "REFUSE",
+    "expected_clause_ids": [],
+    "expected_evidence_clause_ids": [],
+    "expected_facts": [],
+    "forbidden_claims": ["90 days", "medical treatment"],
+    "category": "DEICTIC_FOLLOW_UP",
+    "notes": "Conversation history is display state, not a trusted policy topic; the standalone query requires clarification."
+  },
+  {
+    "id": "A06",
+    "question": "What about appeal deadlines?",
+    "expected_decision": "ANSWER",
+    "expected_clause_ids": ["12.1.2"],
+    "expected_evidence_clause_ids": ["12.1.2"],
+    "expected_facts": ["30 days", "review outcome"],
+    "forbidden_claims": ["10 days"],
+    "category": "ANCHORED_SHORT_QUERY",
+    "notes": "A short question remains answerable when it includes a distinctive policy topic."
+  },
+  {
+    "id": "A07",
+    "question": "How do I apply?",
+    "expected_decision": "ANSWER",
+    "expected_clause_ids": ["8.1.1"],
+    "expected_evidence_clause_ids": ["8.1.1"],
+    "expected_facts": ["online", "in person", "telephone", "in writing"],
+    "forbidden_claims": ["online is the only method"],
+    "category": "ANCHORED_SHORT_QUERY",
+    "notes": "Application-method intent should select the operative method clause rather than the application-date rule."
+  },
+  {
+    "id": "A08",
+    "question": "What does clause 99.9.9 say?",
+    "expected_decision": "REFUSE",
+    "expected_clause_ids": [],
+    "expected_evidence_clause_ids": [],
+    "expected_facts": [],
+    "forbidden_claims": ["clause 99.9.9 states"],
+    "category": "UNKNOWN_CLAUSE",
+    "notes": "An official-looking but nonexistent identifier cannot become a citation."
+  },
+  {
+    "id": "A09",
+    "question": "What does clause 2.4.1 say about cryptocurrency?",
+    "expected_decision": "REFUSE",
+    "expected_clause_ids": [],
+    "expected_evidence_clause_ids": ["2.4.1", "2.4.2", "2.4.3", "6.2.1", "6.3.1"],
+    "expected_facts": [],
+    "forbidden_claims": ["cryptocurrency is countable", "cryptocurrency is exempt"],
+    "category": "CLAUSE_OVERRIDE_RESISTANCE",
+    "notes": "A substantive classification question must not use a mentioned clause ID as an evidence override."
+  },
+  {
+    "id": "A10",
+    "question": "Is the district office open on Saturdays?",
+    "expected_decision": "REFUSE",
+    "expected_clause_ids": [],
+    "expected_evidence_clause_ids": [],
+    "expected_facts": [],
+    "forbidden_claims": ["open on Saturdays", "closed on Saturdays"],
+    "category": "OUT_OF_SCOPE",
+    "notes": "The manual mentions district offices but does not provide office hours."
+  },
+  {
+    "id": "A11",
+    "question": "Flibbertigibbet zorbles quux?",
+    "expected_decision": "REFUSE",
+    "expected_clause_ids": [],
+    "expected_evidence_clause_ids": [],
+    "expected_facts": [],
+    "forbidden_claims": ["eligible", "$4,000"],
+    "category": "NONSENSE",
+    "notes": "Nonsensical vocabulary must not be fuzzy-mapped into an unrelated policy answer."
+  },
+  {
+    "id": "A12",
+    "question": "What is the resource limit, and how is cryptocurrency valued?",
+    "expected_decision": "REFUSE",
+    "expected_clause_ids": [],
+    "expected_evidence_clause_ids": ["2.4.1", "2.4.2", "2.4.3", "6.2.1", "6.3.1"],
+    "expected_facts": [],
+    "forbidden_claims": ["cryptocurrency is valued at market price", "cryptocurrency is exempt"],
+    "category": "MIXED_SUPPORTED_UNSUPPORTED",
+    "notes": "A supported limit cannot license an answer when a material valuation aspect is absent from the manual."
+  },
+  {
+    "id": "A13",
+    "question": "I found both 10 days and 30 days in the manual. Which deadline governs reporting a household change?",
+    "expected_decision": "CONFLICT",
+    "expected_clause_ids": ["4.3.2", "9.1.4"],
+    "expected_evidence_clause_ids": ["4.3.2", "9.1.4"],
+    "expected_facts": ["10 calendar days", "30 calendar days"],
+    "forbidden_claims": ["the definitive deadline is 10 days", "the definitive deadline is 30 days"],
+    "category": "CONFLICT_PARAPHRASE",
+    "notes": "An explicit user-observed discrepancy must surface both reviewed clauses rather than choose a deadline."
+  },
+  {
+    "id": "A14",
+    "question": "Where can I get resource and referral assistance?",
+    "expected_decision": "REFUSE",
+    "expected_clause_ids": [],
+    "expected_evidence_clause_ids": [],
+    "expected_facts": [],
+    "forbidden_claims": ["clause 2.4.1 tells you where to get assistance", "ask a supervisor under clause 2.3.2"],
+    "category": "SERVICE_ACCESS_GAP",
+    "notes": "The manual promises support services and names administering offices but gives no access or referral procedure. Unrelated resource and supervisor clauses cannot be combined into an answer."
+  },
+  {
+    "id": "A15",
+    "question": "Where can I get resorce and referral assistance?",
+    "expected_decision": "REFUSE",
+    "expected_clause_ids": [],
+    "expected_evidence_clause_ids": [],
+    "expected_facts": [],
+    "forbidden_claims": ["clause 2.4.1 tells you where to get assistance", "ask a supervisor under clause 2.3.2"],
+    "category": "TYPO_SERVICE_ACCESS_GAP",
+    "notes": "A misspelling must not turn the same unsupported service-access question into a resource-limit answer."
+  }
+]

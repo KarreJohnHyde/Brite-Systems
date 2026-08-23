@@ -15,6 +15,7 @@ from src.models import (
     RetrievedClause,
     SupportType,
 )
+from src.query_analysis import is_underspecified_question
 
 INDIVIDUAL_DETERMINATION_RE = re.compile(
     r"\b(am i|will i|would i|my eligibility|exactly how much|how much (?:assistance )?(?:will|would|do) i|how old (?:must|do|should) i)\b",
@@ -44,6 +45,16 @@ class DecisionEngine:
         retrieved: list[RetrievedClause],
         evidence: list[EvidenceAssessment],
     ) -> DecisionTrace:
+        if is_underspecified_question(question):
+            return self._trace(
+                question,
+                retrieved,
+                evidence,
+                [],
+                Decision.REFUSE,
+                "The question does not identify a specific policy topic or depends on missing conversational context. Ask a complete standalone question.",
+            )
+
         conflicts = (
             self.conflict_detector.detect(question, retrieved, evidence)
             if self.enable_conflict_check

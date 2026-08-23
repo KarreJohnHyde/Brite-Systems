@@ -3,9 +3,17 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from src.models import DecisionTrace
+
+
+SERVICE_ACCESS_RE = re.compile(
+    r"\b(?:where|how|who)\b.*\b(?:get|find|access|obtain|ask|contact|call)\b.*"
+    r"\b(?:support|referral|services?|assistance|help)\b",
+    re.IGNORECASE,
+)
 
 
 def load_contacts(contacts_path: str | Path | None = None) -> dict:
@@ -20,7 +28,9 @@ def load_contacts(contacts_path: str | Path | None = None) -> dict:
 
 def select_next_step(question: str, contacts: dict) -> str:
     lowered = question.lower()
-    if any(term in lowered for term in ("appeal", "review", "hearing", "panel")):
+    if SERVICE_ACCESS_RE.search(question):
+        key = "default"
+    elif any(term in lowered for term in ("appeal", "review", "hearing", "panel")):
         key = "appeals"
     elif any(term in lowered for term in ("eligible", "eligibility", "qualify", "income", "resource")):
         key = "eligibility"

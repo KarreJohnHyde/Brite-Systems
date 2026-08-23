@@ -16,6 +16,11 @@ QUANTITY_RE = re.compile(
     r"(?P<unit>calendar\s+days?|working\s+days?|days?|weeks?|months?|years?|per\s+cent|percent|%)",
     re.IGNORECASE,
 )
+NUMERIC_INTENT_RE = re.compile(
+    r"\b(how (?:many|much|long)|deadline|amount|rate|percentage|threshold|limit|"
+    r"days?|weeks?|months?|years?|per cent|percent)\b",
+    re.IGNORECASE,
+)
 EXCEPTION_SCOPE_RE = re.compile(r"\b(extended to|except|unless|where|up to|first)\b", re.IGNORECASE)
 NEGATIVE_ACTION_RE = re.compile(
     r"\b(?:must not|shall not|may not)\s+(?:be\s+)?(?P<action>[a-z]+)",
@@ -111,6 +116,8 @@ class ContradictionDetector:
         left: RetrievedClause,
         right: RetrievedClause,
     ) -> ConflictFinding | None:
+        if not NUMERIC_INTENT_RE.search(question):
+            return None
         left_text = left.chunk.text
         right_text = right.chunk.text
         left_values = _quantities(left_text)

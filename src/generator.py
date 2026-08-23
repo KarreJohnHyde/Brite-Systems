@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from src.citations import CitationIntegrityError, CitationValidator
@@ -17,7 +18,11 @@ from src.models import (
     SupportType,
 )
 from src.refusal import load_contacts, refusal_text, select_next_step
+from src.query_analysis import requested_clause_lookup_ids
 from src.retriever import NUMERIC_PASSAGE_RE, NUMERIC_QUESTION_RE
+
+
+LOGGER = logging.getLogger("grounded_answer.generator")
 
 
 class AnswerBuilder:
@@ -51,17 +56,33 @@ class AnswerBuilder:
         source_ids = [item.chunk.chunk_id for item in selected]
         citations = validator.build(source_ids)
 
-        if self.llm_provider is not None:
-            generated = self.llm_provider.generate_structured(trace.question, [item.chunk for item in selected])
-            if generated.decision != Decision.ANSWER:
-                raise CitationIntegrityError(
-                    f"Generator attempted to change trusted decision to {generated.decision.value}"
+        # A request to read a named clause is best served verbatim. The provider
+        # intentionally receives opaque IDs, so asking it to infer the official
+        # clause label would either force a guess or cause a needless refusal.
+        if self.llm_provider is not None and not requested_clause_lookup_ids(trace.question):
+            try:
+                generated = self.llm_provider.generate_structured(
+                    trace.question,
+                    [item.chunk for item in selected],
                 )
-            validator.validate_source_ids(generated.supporting_source_ids)
-            if self.enable_claim_validation:
-                validator.validate_claims(generated.answer, generated.supporting_source_ids)
-            citations = validator.build(generated.supporting_source_ids)
-            answer_text = generated.answer.strip()
+                if generated.decision != Decision.ANSWER:
+                    raise CitationIntegrityError(
+                        f"Generator attempted to change trusted decision to {generated.decision.value}"
+                    )
+                validator.validate_source_ids(generated.supporting_source_ids)
+                if self.enable_claim_validation:
+                    validator.validate_claims(generated.answer, generated.supporting_source_ids)
+                citations = validator.build(generated.supporting_source_ids)
+                answer_text = generated.answer.strip()
+            except Exception as exc:
+                # The decision and sources were already validated before the
+                # optional phrasing call. Never show rejected model text; retain
+                # availability by falling back to the exact trusted clauses.
+                LOGGER.warning(
+                    "Optional answer phrasing failed validation; using trusted source text (%s)",
+                    type(exc).__name__,
+                )
+                answer_text = self._verbatim_answer(selected)
         else:
             answer_text = self._verbatim_answer(selected)
 
@@ -130,6 +151,16 @@ class AnswerBuilder:
         pairs = self._direct_pairs(trace)
         if not pairs:
             raise CitationIntegrityError("Decision was ANSWER but no DIRECT sources remained")
+
+        lookup_ids = requested_clause_lookup_ids(trace.question)
+        if lookup_ids:
+            exact = [
+                result
+                for result, _ in pairs
+                if result.chunk.clause_id in lookup_ids
+            ]
+            if exact:
+                return sorted(exact, key=lambda item: item.chunk.source_order)
 
         selected: list[RetrievedClause] = []
         if trace.required_aspects:

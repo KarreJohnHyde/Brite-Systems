@@ -37,7 +37,7 @@ checks without changing source truth.
 | --- | --- | --- |
 | `ANSWER` | Direct, complete, internally consistent evidence clears the configured support boundary | Plain answer, trusted clause citations, exact excerpts, and evidence level |
 | `CONFLICT` | Materially incompatible relevant provisions have no source-backed precedence rule | Both sides, both citations, why no single rule can be chosen, and an escalation step |
-| `REFUSE` | Evidence is absent, related-only, partial, below threshold, dependent on missing case facts, affected by a known gap, or fails provider/citation validation | Explicit “I don't know based on the current policy manual,” the reason, and a non-fabricated next step |
+| `REFUSE` | Evidence is absent, related-only, partial, below threshold, dependent on missing case facts, affected by a known gap, or cannot produce any citation-valid fallback | Explicit “I don't know based on the current policy manual,” the reason, and a non-fabricated next step |
 
 `ANSWER` requires at least one trusted citation. `CONFLICT` requires at least
 two. An LLM cannot change the decision already made by the deterministic
@@ -161,6 +161,21 @@ checked-in evaluator or calibrator with another corpus. The parser expects the
 actual manual's `Part`, section, and numbered-clause structure and fails with a
 clear error when that structure is not present.
 
+### Quarterly manual update
+
+For each new consolidated manual:
+
+1. Replace or repoint `CORPUS_PATH` to the reviewed Markdown source.
+2. Update and human-review `data/policy_findings.json` and `data/contacts.json`
+   so their `document_id`, `consolidated_as_of`, and cited clauses match it.
+3. Run `corpus-report`, then re-ingest with the selected embedding backend.
+4. Run the unit, core evaluation, and adversarial evaluation commands below.
+5. Restart long-running CLI workers. Streamlit automatically uses a new cached
+   pipeline key when the corpus, manifest, findings, or contact metadata changes.
+
+The runtime refuses stale companion metadata, a changed corpus with an old
+index, unknown reviewed clause references, or an embedding/index mismatch.
+
 ## CLI usage
 
 Ask one question using the safe default:
@@ -207,6 +222,9 @@ status when one or more cases fail:
 ```powershell
 python main.py evaluate --embedding-backend hashing
 python main.py evaluate --embedding-backend hashing --quiet
+python main.py evaluate --embedding-backend hashing `
+  --questions evaluation/adversarial_questions.json `
+  --output-dir evaluation/results/adversarial --quiet
 ```
 
 Sweep evidence thresholds against the labeled evaluation set:
@@ -235,9 +253,13 @@ recall, required-citation recall, and unsupported-claim safety on this
 development set. The calibration sweep evaluated 28 threshold combinations and
 retained `REFUSAL_THRESHOLD=0.58` and `DIRECT_COVERAGE_THRESHOLD=0.34`, with
 zero false answers and zero missed conflicts for the recommended candidate.
-The automated suite passed 74 tests. These are development-set measurements,
-not generalization guarantees; see
+The separate adversarial set passed 15 / 15 cases covering ambiguity, deictic
+follow-ups, exact and forged clause references, colloquial wording, typos,
+service-access gaps, out-of-scope questions, nonsense input, and mixed
+supported/unsupported asks. The automated suite passed 110 tests. These remain
+bounded measurements, not generalization guarantees; see
 [`evaluation/results/evaluation.md`](evaluation/results/evaluation.md) and
+[`evaluation/results/adversarial/evaluation.md`](evaluation/results/adversarial/evaluation.md) and
 [`evaluation/results/calibration.md`](evaluation/results/calibration.md) for the
 complete case-level evidence.
 
@@ -319,6 +341,7 @@ Then set these values in the untracked `.env` file:
 ```dotenv
 LLM_PROVIDER=gemini
 GEMINI_MODEL=gemini-3.6-flash
+GEMINI_THINKING_LEVEL=minimal
 GEMINI_API_KEY=
 ```
 
@@ -328,8 +351,35 @@ Set `GEMINI_API_KEY` to your own credential in the untracked file, then run:
 python main.py ask "What is the household resource limit?" --provider gemini
 ```
 
-Provider errors, malformed output, unsupported claims, and invalid source IDs
-are converted to `REFUSE`; an unvalidated answer is not shown.
+Gemini 3 requests use minimal thinking for this short structured phrasing task.
+Provider errors, malformed output, unsupported claims, decision changes, and
+invalid source IDs are discarded. The assistant then shows the already
+validated exact policy text and trusted citation; rejected model text is never
+rendered. If that fallback also fails validation, the pipeline returns
+`REFUSE`.
+
+## Optional LangSmith tracing
+
+The custom pipeline can emit privacy-preserving LangSmith spans without
+installing LangChain. Install the pinned optional SDK:
+
+```powershell
+python -m pip install -r requirements-tracing.txt
+```
+
+Then configure the untracked `.env` file:
+
+```dotenv
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=
+LANGSMITH_PROJECT=grounded-answer
+```
+
+`LANGCHAIN_API_KEY` remains accepted as a legacy fallback, but new setups
+should use the official `LANGSMITH_API_KEY` name. Traces contain timing and
+state diagnostics for retrieval, evidence assessment, decision, and validated
+answer construction. Raw questions, generated answers, reasons, next steps,
+policy excerpts, and full debug traces are excluded by a strict allowlist.
 
 ## Streamlit interface
 
@@ -341,8 +391,12 @@ python -m streamlit run app.py
 ```
 
 The sidebar selects the embedding backend and answer provider. Its backend must
-match the index built by `ingest`. Restart Streamlit after editing `.env`. The
-CLI is the canonical interface for evaluation and reproducibility.
+match the index built by `ingest`. The page displays the active consolidated
+manual version. Its cached pipeline key includes the corpus, index manifest,
+reviewed findings, and contact metadata, so a quarterly change cannot keep
+serving an old in-memory pipeline. Restart Streamlit after editing unrelated
+runtime-only `.env` settings. The CLI is the canonical interface for evaluation
+and reproducibility.
 
 ## Privacy and security
 
@@ -359,9 +413,12 @@ CLI is the canonical interface for evaluation and reproducibility.
 - `.env` and Streamlit secrets are ignored. Never commit API keys.
 - Debug traces contain the question, retrieved excerpts, scores, and decision
   rationale. Treat exported traces as potentially sensitive.
+- LangSmith tracing is content-redacted by design and records only allowlisted
+  diagnostics such as counts, decisions, evidence levels, and clause IDs.
 - Index loading verifies schema, chunk count, dimensions, artifact checksums,
   embedding backend, model identity where applicable, the current corpus
-  SHA-256, and every citation field against a fresh parse of the source.
+  SHA-256, every citation field against a fresh parse of the source, and the
+  version/clause references in reviewed findings and escalation metadata.
 
 ## Known corpus conflicts and gaps
 
@@ -426,19 +483,22 @@ grounded-answer/
 │   ├── lexical.py              lexical retrieval
 │   ├── vector_store.py         persisted FAISS index and integrity checks
 │   ├── retriever.py            hybrid retrieval, neighbors, optional reranking
+│   ├── query_analysis.py        exact-reference and ambiguity guards
 │   ├── evidence.py             support classification
 │   ├── contradiction.py        curated and deterministic conflict checks
 │   ├── decision_engine.py      ANSWER / CONFLICT / REFUSE state machine
 │   ├── generator.py            deterministic answer builder
 │   ├── citations.py            citation and claim validation
 │   ├── refusal.py              refusal and escalation text
+│   ├── observability.py        content-redacted LangSmith tracing
 │   ├── pipeline.py             composition root and fail-safe orchestration
 │   └── llm/                    optional provider interface and Gemini adapter
-├── evaluation/                 labeled questions, runner, calibration, results
+├── evaluation/                 core/adversarial labels, runner, calibration, results
 ├── tests/                      automated tests
 ├── requirements.txt            pinned Python dependencies
 ├── requirements-ml.txt         optional local models and reranker
 ├── requirements-llm.txt        optional Gemini provider
+├── requirements-tracing.txt    optional LangSmith observability
 ├── requirements-ui.txt         optional Streamlit interface
 ├── .env.example                safe runtime defaults
 ├── DECISIONS.md                architecture and safety decisions

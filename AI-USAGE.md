@@ -32,6 +32,9 @@ AI drafted and revised Python modules, Pydantic schemas, configuration loading,
 the CLI, the optional Streamlit interface, deterministic retrieval/generation,
 the optional Gemini provider, and citation safeguards. Generated code was
 inspected in the repository rather than accepted solely from prose output.
+Codex also added direct LangSmith instrumentation with a strict diagnostic
+allowlist; raw questions, answers, policy text, reasons, and next steps are not
+included in remote trace payloads.
 
 ### Corpus analysis and test suggestions
 
@@ -91,7 +94,9 @@ legal, or operational approval.
 - LLM generation is optional and downstream of the deterministic decision.
 - Provider-selected source IDs are allowlisted against retrieved chunks and
   mapped back to trusted ingestion metadata in code.
-- Unsupported provider output fails closed to `REFUSE`.
+- Unsupported provider output is discarded. The system falls back to the exact
+  already-validated source clause; it refuses only if that trusted fallback also
+  cannot satisfy the answer contract.
 - Evaluation failures are retained and must not be relabeled merely to improve a
   score.
 
