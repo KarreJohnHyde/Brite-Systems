@@ -113,8 +113,8 @@ def test_pipeline_emits_safe_diagnostic_spans(
     assert answer.decision == Decision.ANSWER
     assert [event["name"] for event in tracer.events] == [
         "query",
+        "temporal-applicability",
         "retrieve-policy-evidence",
-        "assess-evidence",
         "decide-answer-state",
         "build-validated-answer",
     ]

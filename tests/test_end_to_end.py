@@ -66,7 +66,12 @@ def test_user_prompt_injection_cannot_bypass_policy_only_answering(pipeline) -> 
 
 
 class InventedClaimProvider:
-    def generate_structured(self, question, contexts):
+    def evaluate_coverage(self, question, contexts):
+        from src.models import CoverageGateResult
+        return CoverageGateResult(covered=True, uncovered_aspect=None, confidence=1.0)
+
+    def generate_answer(self, question, contexts):
+        from src.models import GenerationSelection, Decision
         return GenerationSelection(
             decision=Decision.ANSWER,
             answer="The resource limit is $99,999.",
@@ -76,7 +81,12 @@ class InventedClaimProvider:
 
 
 class ForgedSourceProvider:
-    def generate_structured(self, question, contexts):
+    def evaluate_coverage(self, question, contexts):
+        from src.models import CoverageGateResult
+        return CoverageGateResult(covered=True, uncovered_aspect=None, confidence=1.0)
+
+    def generate_answer(self, question, contexts):
+        from src.models import GenerationSelection, Decision
         return GenerationSelection(
             decision=Decision.ANSWER,
             answer="The resource limit is $4,000.",
@@ -86,7 +96,12 @@ class ForgedSourceProvider:
 
 
 class DecisionOverrideProvider:
-    def generate_structured(self, question, contexts):
+    def evaluate_coverage(self, question, contexts):
+        from src.models import CoverageGateResult
+        return CoverageGateResult(covered=True, uncovered_aspect=None, confidence=1.0)
+
+    def generate_answer(self, question, contexts):
+        from src.models import GenerationSelection, Decision
         return GenerationSelection(
             decision=Decision.REFUSE,
             answer="Provider tried to change the decision.",
@@ -96,7 +111,11 @@ class DecisionOverrideProvider:
 
 
 class UnexpectedClauseLookupProvider:
-    def generate_structured(self, question, contexts):
+    def evaluate_coverage(self, question, contexts):
+        from src.models import CoverageGateResult
+        return CoverageGateResult(covered=True, uncovered_aspect=None, confidence=1.0)
+
+    def generate_answer(self, question, contexts):
         raise AssertionError("pure clause lookup should use trusted verbatim text")
 
 
@@ -141,15 +160,24 @@ def test_exact_clause_lookup_bypasses_optional_phrasing_provider(
     )
 
     answer = pipeline.ask("What does clause 2.4.1 say?")
+    print("Decision:", answer.decision, "Reason:", answer.reason)
 
     assert answer.decision == Decision.ANSWER
     assert [citation.clause_id for citation in answer.citations] == ["2.4.1"]
 
 
 def test_absence_extension_is_answered_not_falsely_conflicted(pipeline) -> None:
-    answer = pipeline.ask(
-        "How long can a recipient be temporarily absent from the county, including exceptions?"
-    )
+    question = "How long can a recipient be temporarily absent from the county, including exceptions?"
+    retrieved = pipeline.retriever.retrieve(question)
+    trace = pipeline.decision_engine.decide(question, retrieved)
+    print("\nDEBUG:")
+    print("Required aspects:", trace.required_aspects)
+    # We know trace.retrieved has chunks
+    chunk_map = {r.chunk.chunk_id: r.chunk.clause_id for r in trace.retrieved}
+    print("Evidence:", [(chunk_map.get(e.chunk_id, 'UNKNOWN'), str(e.support_type), e.score) for e in trace.evidence])
+    selected = pipeline.answer_builder._select_direct_sources(trace)
+    print("Selected:", [c.chunk.clause_id for c in selected])
+    answer = pipeline.ask(question)
 
     assert answer.decision == Decision.ANSWER
     assert {"3.2.1", "3.2.2", "3.2.4"} <= {

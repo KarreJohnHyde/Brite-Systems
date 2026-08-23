@@ -148,11 +148,16 @@ class ConflictFinding(BaseModel):
 class DecisionTrace(BaseModel):
     question: str
     retrieved: list[RetrievedClause]
-    evidence: list[EvidenceAssessment]
+    evidence: list[EvidenceAssessment] = Field(default_factory=list)
     conflicts: list[ConflictFinding] = Field(default_factory=list)
     decision: Decision
     decision_reason: str
     refusal_threshold: float
+    # Retrieval and the reviewed temporal resolver have different, auditable
+    # grounding paths.  Keeping the distinction on the trace lets evaluation
+    # verify date-resolved answers without requiring the user-facing plain-
+    # language answer to repeat every cited clause verbatim.
+    resolution_path: Literal["retrieval", "temporal"] = "retrieval"
     required_aspects: list[str] = Field(default_factory=list)
     missing_aspects: list[str] = Field(default_factory=list)
 

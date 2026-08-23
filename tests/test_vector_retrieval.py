@@ -373,7 +373,7 @@ def test_corpus_hash_mismatch_is_rejected(tmp_path: Path, corpus_path: Path) -> 
     manifest = {"corpus_sha256": hashlib.sha256(corpus_path.read_bytes()).hexdigest()}
 
     with pytest.raises(IndexIntegrityError, match="corpus differs"):
-        GroundedAnswerPipeline._validate_corpus_identity(altered, manifest)
+        GroundedAnswerPipeline._validate_corpus_identity((altered,), manifest)
 
 
 def test_indexed_citation_metadata_must_match_authoritative_source(
@@ -384,7 +384,7 @@ def test_indexed_citation_metadata_must_match_authoritative_source(
     tampered[0] = tampered[0].model_copy(update={"line_start": 999})
 
     with pytest.raises(IndexIntegrityError, match="citation metadata does not match"):
-        GroundedAnswerPipeline._validate_chunk_metadata(corpus_path, tampered)
+        GroundedAnswerPipeline._validate_chunk_metadata((corpus_path,), tampered)
 
 
 def test_stale_reviewed_findings_are_rejected_after_policy_update(

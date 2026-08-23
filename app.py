@@ -28,10 +28,12 @@ st.set_page_config(
 
 
 def _citation_label(citation: dict[str, Any]) -> str:
+    if label := citation.get("source_locator_label"):
+        return str(label)
     clause_id = citation.get("clause_id")
-    source_id = citation.get("chunk_id", "source")
-    section = citation.get("section_title") or "Untitled section"
-    return f"§{clause_id} — {section}" if clause_id else f"{source_id} — {section}"
+    if clause_id:
+        return f"Policy Manual §{clause_id}"
+    return str(citation.get("source_locator") or "Unlabelled policy source")
 
 
 def _render_answer(payload: dict[str, Any]) -> None:
@@ -39,7 +41,7 @@ def _render_answer(payload: dict[str, Any]) -> None:
 
     decision = str(payload.get("decision", "REFUSE")).upper()
     if decision == "ANSWER":
-        st.success("ANSWER — directly supported by the manual")
+        st.success("ANSWER — directly supported by the policy sources")
     elif decision == "CONFLICT":
         st.warning("CONFLICT — the manual contains incompatible guidance")
     else:
@@ -73,7 +75,7 @@ def _render_answer(payload: dict[str, Any]) -> None:
                     location = f"page {page}; {location}"
                 st.markdown(
                     f"**{_citation_label(citation)}**  \n"
-                    f"{location} · Source ID `{citation.get('chunk_id', 'unknown')}`"
+                    f"{location}"
                 )
                 st.code(str(citation.get("excerpt", "")), language=None, wrap_lines=True)
 
@@ -88,11 +90,15 @@ def _artifact_revision(settings: Settings) -> str:
     digest = hashlib.sha256()
     paths = (
         settings.corpus_path,
+        settings.amendment_path,
+        settings.timeline_path,
         settings.index_dir / "manifest.json",
         settings.findings_path,
         settings.contacts_path,
     )
     for path in paths:
+        if path is None:
+            continue
         digest.update(str(path.resolve()).encode("utf-8"))
         try:
             digest.update(path.read_bytes())
@@ -118,7 +124,7 @@ def _load_pipeline(
 st.title("The Grounded Answer")
 st.subheader("Calder County HSP policy evidence assistant")
 st.markdown(
-    "This assistant uses only the supplied policy manual. It chooses **ANSWER**, "
+    "This assistant uses only the supplied policy manual and applicable amendments. It chooses **ANSWER**, "
     "**CONFLICT**, or **REFUSE**, and exposes the exact source text behind every "
     "supported answer. It is decision support, not an eligibility decision-maker."
 )
@@ -181,7 +187,8 @@ except (FileNotFoundError, ImportError, RuntimeError, ValueError) as exc:
         st.caption("Gemini additionally requires GEMINI_API_KEY in .env or the process environment.")
     st.stop()
 
-active_manual = pipeline.store.chunks[0]
+manual_chunks = [chunk for chunk in pipeline.store.chunks if chunk.source_kind == "manual"]
+amendment_chunks = [chunk for chunk in pipeline.store.chunks if chunk.source_kind == "amendment"]
 if not runtime_settings.enable_reranking:
     reranking_runtime = "Reranking is disabled through ENABLE_RERANKING."
 elif pipeline.retriever.reranker is None or pipeline.retriever.reranker_error:
@@ -195,10 +202,18 @@ reranking_slot.caption(
     + " Restart Streamlit after editing .env. The selected embedding backend must match "
     "the backend used for ingestion."
 )
+active_manual = manual_chunks[0] if manual_chunks else pipeline.store.chunks[0]
 version = active_manual.document_version or "version not stated"
+amendment_caption = (
+    f" · Amendment No. {amendment_chunks[0].amendment_number} effective "
+    f"{amendment_chunks[0].effective_date}"
+    if amendment_chunks
+    else ""
+)
 st.caption(
     f"Active manual: {active_manual.document_name} · consolidated {version} · "
-    f"{len(pipeline.store.chunks)} official clauses"
+    f"{len(manual_chunks)} manual clauses and {len(amendment_chunks)} amendment paragraphs"
+    f"{amendment_caption}"
 )
 
 if "messages" not in st.session_state:

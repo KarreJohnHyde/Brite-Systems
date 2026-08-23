@@ -61,9 +61,9 @@ class AnswerBuilder:
         # clause label would either force a guess or cause a needless refusal.
         if self.llm_provider is not None and not requested_clause_lookup_ids(trace.question):
             try:
-                generated = self.llm_provider.generate_structured(
+                generated = self.llm_provider.generate_answer(
                     trace.question,
-                    [item.chunk for item in selected],
+                    [item.chunk for item in trace.retrieved],
                 )
                 if generated.decision != Decision.ANSWER:
                     raise CitationIntegrityError(
@@ -136,7 +136,7 @@ class AnswerBuilder:
         cited_chunks = validator.validate_source_ids(ordered_ids)
         lines = ["The manual contains conflicting guidance for this question."]
         for chunk in cited_chunks:
-            lines.append(f"§{chunk.clause_id}: {chunk.text}")
+            lines.append(f"{self._display_reference(chunk)}: {chunk.text}")
         lines.append("Because the manual does not establish which rule controls, I cannot provide a single answer.")
         return PolicyAnswer(
             decision=Decision.CONFLICT,
@@ -236,12 +236,21 @@ class AnswerBuilder:
         ]
 
     @staticmethod
+    def _display_reference(chunk) -> str:
+        if chunk.clause_id:
+            return f"§{chunk.clause_id}"
+        return chunk.source_locator_label or chunk.source_locator or chunk.chunk_id
+
+    @staticmethod
     def _verbatim_answer(selected: list[RetrievedClause]) -> str:
         if len(selected) == 1:
             chunk = selected[0].chunk
-            return f"The manual states in §{chunk.clause_id}: {chunk.text}"
+            return f"The manual states in {AnswerBuilder._display_reference(chunk)}: {chunk.text}"
         lines = ["The manual states:"]
-        lines.extend(f"- §{item.chunk.clause_id}: {item.chunk.text}" for item in selected)
+        lines.extend(
+            f"- {AnswerBuilder._display_reference(item.chunk)}: {item.chunk.text}"
+            for item in selected
+        )
         return "\n".join(lines)
 
     @staticmethod

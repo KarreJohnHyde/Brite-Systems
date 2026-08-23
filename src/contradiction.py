@@ -66,7 +66,6 @@ class ContradictionDetector:
         self,
         question: str,
         retrieved: list[RetrievedClause],
-        evidence: list[EvidenceAssessment],
     ) -> list[ConflictFinding]:
         by_clause = {item.chunk.clause_id: item for item in retrieved if item.chunk.clause_id}
         results: list[ConflictFinding] = []
@@ -90,14 +89,10 @@ class ContradictionDetector:
                     )
                 )
 
-        assessed = {item.chunk_id: item for item in evidence}
-        candidates = [
-            item
-            for item in retrieved
-            if assessed.get(item.chunk.chunk_id)
-            and assessed[item.chunk.chunk_id].support_type != SupportType.NONE
-        ]
+        candidates = retrieved
         existing_pairs = {frozenset(finding.chunk_ids) for finding in results}
+        if len(candidates) < 2:
+            return results
         for left, right in combinations(candidates[:12], 2):
             pair = frozenset((left.chunk.chunk_id, right.chunk.chunk_id))
             if pair in existing_pairs:

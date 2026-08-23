@@ -66,7 +66,10 @@ def run_evaluation(
     known_clause_ids = {
         chunk.clause_id for chunk in pipeline.store.chunks if chunk.clause_id is not None
     }
-    validate_question_clause_ids(questions, known_clause_ids)
+    known_source_locators = {
+        chunk.source_locator for chunk in pipeline.store.chunks if chunk.source_locator is not None
+    }
+    validate_question_clause_ids(questions, known_clause_ids, known_source_locators)
 
     case_results: list[dict[str, Any]] = []
     for case in questions:
@@ -181,6 +184,7 @@ def _requirement_statuses(report: dict[str, Any]) -> dict[str, list[dict[str, An
         {
             "name": "Clause-level citation",
             "pass": metrics["citation"]["micro_clause_recall"] == 1.0
+            and metrics["source_locator"]["citation_recall"] == 1.0
             and metrics["citation"]["integrity_rate"] == 1.0,
         },
         {
@@ -248,6 +252,7 @@ def _markdown_report(report: dict[str, Any]) -> str:
         f"| CONFLICT decision precision / recall | {_state_result(metrics['conflict'])} |",
         f"| Expected evidence retrieval | {metrics['retrieval']['clauses_found']} / {metrics['retrieval']['clauses_expected']} ({_percent(metrics['retrieval']['micro_clause_recall'])}) |",
         f"| Required citation recall | {metrics['citation']['clauses_cited']} / {metrics['citation']['clauses_expected']} ({_percent(metrics['citation']['micro_clause_recall'])}) |",
+        f"| Required amendment/source citation recall | {metrics['source_locator']['citations_found']} / {metrics['source_locator']['citations_expected']} ({_percent(metrics['source_locator']['citation_recall'])}) |",
         f"| Citation integrity | {metrics['citation']['integrity_passes']} / {metrics['total']} ({_percent(metrics['citation']['integrity_rate'])}) |",
         f"| Expected fact recall | {metrics['facts']['facts_found']} / {metrics['facts']['facts_expected']} ({_percent(metrics['facts']['micro_fact_recall'])}) |",
         f"| Unsupported-claim safety | {metrics['unsupported']['safe_cases']} / {metrics['total']} ({_percent(metrics['unsupported']['safety_rate'])}) |",
@@ -319,8 +324,11 @@ def _markdown_report(report: dict[str, Any]) -> str:
                 f"- Expected / actual: `{result['expected_decision']}` / `{result['actual_decision']}`",
                 f"- Retrieved clauses: {_list_or_none(result['retrieved_clause_ids'])}",
                 f"- Cited clauses: {_list_or_none(result['cited_clause_ids'])}",
+                f"- Cited source locators: {_list_or_none(result.get('cited_source_locators', []))}",
                 f"- Missing evidence: {_list_or_none(result['missing_evidence_clause_ids'])}",
                 f"- Missing citations: {_list_or_none(result['missing_citation_clause_ids'])}",
+                f"- Missing source-locator evidence: {_list_or_none(result.get('missing_evidence_source_locators', []))}",
+                f"- Missing source-locator citations: {_list_or_none(result.get('missing_citation_source_locators', []))}",
                 f"- Missing facts: {_list_or_none(result['missing_facts'])}",
                 f"- Forbidden claims found: {_list_or_none(result['forbidden_claims_found'])}",
                 f"- Failure taxonomy: {_list_or_none(result['failure_types'])}",

@@ -27,8 +27,7 @@ def test_curated_reporting_deadline_conflict_is_detected(
 
     findings = ContradictionDetector(findings_path).detect(
         "How many days do I have to report a change of circumstances?",
-        retrieved,
-        [direct(item) for item in retrieved],
+        retrieved
     )
 
     assert len(findings) == 1
@@ -54,8 +53,7 @@ def test_numeric_cross_reference_conflict_is_detected(make_chunk, make_result) -
 
     findings = ContradictionDetector().detect(
         "How many days may a recipient take to report a change?",
-        retrieved,
-        [direct(item) for item in retrieved],
+        retrieved
     )
 
     assert len(findings) == 1
@@ -69,7 +67,6 @@ def test_28_to_90_day_extension_is_not_a_conflict(chunks, make_result) -> None:
     findings = ContradictionDetector().detect(
         "How long may a recipient be absent, including the medical extension?",
         retrieved,
-        [direct(item) for item in retrieved],
     )
 
     assert findings == []
@@ -84,8 +81,7 @@ def test_unasked_neighbor_deadlines_do_not_create_a_numeric_conflict(
 
     findings = ContradictionDetector().detect(
         "Is an overpayment caused solely by Department error recoverable?",
-        retrieved,
-        [direct(item) for item in retrieved],
+        retrieved
     )
 
     assert findings == []
@@ -108,8 +104,7 @@ def test_opposite_eligibility_polarity_is_detected(make_chunk, make_result) -> N
 
     findings = ContradictionDetector().detect(
         "Are applicants resident in the county eligible for assistance?",
-        retrieved,
-        [direct(item) for item in retrieved],
+        retrieved
     )
 
     assert any(finding.basis == "POLARITY" for finding in findings)

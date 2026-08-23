@@ -19,13 +19,20 @@ from pathlib import Path
 
 from config.settings import Settings
 from src.models import PolicyAnswer
-from src.parser import build_corpus_report, find_chunks, parse_policy_manual
+from src.parser import (
+    build_combined_corpus_report,
+    build_corpus_report,
+    find_chunks,
+    parse_policy_manual,
+    parse_policy_sources,
+)
 from src.pipeline import GroundedAnswerPipeline, ingest_corpus, load_source_chunks
 
 
 def _settings(args: argparse.Namespace) -> Settings:
     return Settings.from_env(
         corpus_path=getattr(args, "corpus", None),
+        amendment_path=getattr(args, "amendment", None),
         embedding_backend=getattr(args, "embedding_backend", None),
         llm_provider=getattr(args, "provider", None),
     )
@@ -94,11 +101,17 @@ def print_policy_answer(answer: PolicyAnswer, *, debug: bool = False) -> None:
         print()
         print("SOURCES")
         for citation in answer.citations:
-            label = f"§{citation.clause_id}" if citation.clause_id else citation.chunk_id
+            label = (
+                citation.source_locator_label
+                or (f"Policy Manual §{citation.clause_id}" if citation.clause_id else None)
+                or citation.source_locator
+                or citation.chunk_id
+            )
             location = f"lines {citation.line_start}-{citation.line_end}"
             if citation.page is not None:
                 location = f"page {citation.page}; {location}"
-            print(f"{label} — {citation.section_title or 'Untitled section'} ({location})")
+            title = citation.section_title or citation.document_title or "Untitled source"
+            print(f"{label} — {title} ({location})")
             print(f'"{citation.excerpt}"')
             print()
     print(f"Evidence: {answer.evidence_level.value}")
@@ -121,11 +134,15 @@ def cmd_source(args: argparse.Namespace) -> int:
     for index, chunk in enumerate(matches):
         if index:
             print()
-        label = f"§{chunk.clause_id}" if chunk.clause_id else chunk.chunk_id
+        label = (
+            chunk.source_locator_label
+            or (f"Policy Manual §{chunk.clause_id}" if chunk.clause_id else None)
+            or chunk.source_locator
+            or chunk.chunk_id
+        )
         print(f"{label} — {chunk.section_id} {chunk.section_title}")
         print(f"Document: {chunk.document_name} ({chunk.document_version or 'version not stated'})")
         print(f"Page: unavailable | Lines: {chunk.line_start}-{chunk.line_end}")
-        print(f"Source ID: {chunk.chunk_id}")
         print()
         print("FULL SOURCE TEXT")
         print(chunk.source_text)
@@ -134,8 +151,13 @@ def cmd_source(args: argparse.Namespace) -> int:
 
 def cmd_corpus_report(args: argparse.Namespace) -> int:
     settings = _settings(args)
-    chunks = parse_policy_manual(settings.corpus_path)
-    report = build_corpus_report(settings.corpus_path, chunks)
+    paths = settings.source_paths
+    if len(paths) == 1:
+        chunks = parse_policy_manual(paths[0])
+        report = build_corpus_report(paths[0], chunks)
+    else:
+        chunks = parse_policy_sources(paths[0], paths[1:])
+        report = build_combined_corpus_report(paths, chunks)
     print(report.model_dump_json(indent=2))
     return 0
 
@@ -213,6 +235,11 @@ def build_parser() -> argparse.ArgumentParser:
     ingest = commands.add_parser("ingest", help="Parse the real corpus and build the policy index")
     ingest.add_argument("--corpus", type=Path, help="Path to the supplied Markdown corpus")
     ingest.add_argument(
+        "--amendment",
+        type=Path,
+        help="Optional amendment paired with an explicitly supplied manual",
+    )
+    ingest.add_argument(
         "--embedding-backend",
         choices=("hashing", "sentence-transformers"),
         help="Dense embedding backend (default: environment or hashing)",
@@ -222,6 +249,7 @@ def build_parser() -> argparse.ArgumentParser:
     ask = commands.add_parser("ask", help="Ask one plain-language policy question")
     ask.add_argument("question")
     ask.add_argument("--corpus", type=Path, help=argparse.SUPPRESS)
+    ask.add_argument("--amendment", type=Path, help=argparse.SUPPRESS)
     ask.add_argument("--embedding-backend", choices=("hashing", "sentence-transformers"))
     ask.add_argument("--provider", choices=("deterministic", "gemini"))
     ask.add_argument("--debug", action="store_true", help="Show retrieval/evidence/decision trace")
@@ -231,11 +259,13 @@ def build_parser() -> argparse.ArgumentParser:
     source = commands.add_parser("source", aliases=["show-clause"], help="Show exact source text")
     source.add_argument("source_id", help="Opaque chunk ID, official clause ID, or section ID")
     source.add_argument("--corpus", type=Path, help=argparse.SUPPRESS)
+    source.add_argument("--amendment", type=Path, help=argparse.SUPPRESS)
     source.add_argument("--json", action="store_true")
     source.set_defaults(func=cmd_source)
 
     report = commands.add_parser("corpus-report", help="Inspect corpus structure without indexing")
     report.add_argument("--corpus", type=Path)
+    report.add_argument("--amendment", type=Path)
     report.set_defaults(func=cmd_corpus_report)
 
     evaluate = commands.add_parser("evaluate", help="Run the source-derived evaluation set")

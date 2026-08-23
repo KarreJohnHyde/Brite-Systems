@@ -1,9 +1,10 @@
 # Evaluation Results — The Grounded Answer
 
-**Generated (UTC):** 2026-08-23T03:37:39.905270+00:00
+**Generated (UTC):** 2026-08-23T10:29:52.593231+00:00
 **Run type:** `strict_end_to_end`
-**Corpus SHA-256:** `e595d8d82c3c07c840ca1fefab95a22c6ca5d83e027c1c259953f24b33ec6b57`
-**Embedding backend:** `sentence-transformers`
+**Corpus SHA-256:** `225267869bb2b02536fe59f4d73c53106305460127bdf0f15fd4a5bce796cbca`
+**Embedding backend:** `hashing`
+**Reranking:** disabled
 **LLM/provider:** deterministic; no generation API used
 
 ## Aggregate metrics
@@ -17,6 +18,7 @@
 | CONFLICT decision precision / recall | 100.0% / 100.0% (1 correct) |
 | Expected evidence retrieval | 17 / 17 (100.0%) |
 | Required citation recall | 7 / 7 (100.0%) |
+| Required amendment/source citation recall | 1 / 1 (100.0%) |
 | Citation integrity | 15 / 15 (100.0%) |
 | Expected fact recall | 14 / 14 (100.0%) |
 | Unsupported-claim safety | 15 / 15 (100.0%) |
@@ -74,10 +76,13 @@ No failures.
 whats the max resorce amount a houshold can hav?
 
 - Expected / actual: `ANSWER` / `ANSWER`
-- Retrieved clauses: `2.4.1`, `2.4.2`, `2.4.3`, `9.2.2`, `9.4.1`, `9.3.2`, `9.2.1`
+- Retrieved clauses: `2.4.1`, `2.4.2`, `2.4.3`, `9.2.2`, `9.4.1`, `9.2.1`, `8.7.1`, `9.4.2`
 - Cited clauses: `2.4.1`
+- Cited source locators: `manual:2.4.1`
 - Missing evidence: none
 - Missing citations: none
+- Missing source-locator evidence: none
+- Missing source-locator citations: none
 - Missing facts: none
 - Forbidden claims found: none
 - Failure taxonomy: none
@@ -93,10 +98,13 @@ The manual states in §2.4.1: A household is not eligible where the total counta
 What does clause 2.4.1 say?
 
 - Expected / actual: `ANSWER` / `ANSWER`
-- Retrieved clauses: `2.4.1`, `2.4.2`, `1.4.9`, `1.4.2`, `1.4.4`, `1.4.8`, `1.4.10`, `1.1.3`, `1.2.2`, `1.4.1`, `1.4.3`, `1.4.5`
+- Retrieved clauses: `2.4.1`, `2.4.2`, `8.5.3`, `8.2.1`, `8.5.2`, `8.2.2`, `9.1.5`, `10.4.1`, `1.4.2`, `9.1.4`
 - Cited clauses: `2.4.1`
+- Cited source locators: `manual:2.4.1`
 - Missing evidence: none
 - Missing citations: none
+- Missing source-locator evidence: none
+- Missing source-locator citations: none
 - Missing facts: none
 - Forbidden claims found: none
 - Failure taxonomy: none
@@ -112,10 +120,13 @@ The manual states in §2.4.1: A household is not eligible where the total counta
 Can I keep getting help while I'm away for a few weeks?
 
 - Expected / actual: `ANSWER` / `ANSWER`
-- Retrieved clauses: `3.2.1`, `5.2.1`, `3.2.2`, `5.2.2`, `5.2.3`, `3.2.4`, `2.2.1`, `2.1.2`, `4.1.1`, `10.1.1`, `10.5.1`, `10.5.2`
+- Retrieved clauses: `3.2.1`, `3.2.2`, `5.2.1`, `5.2.2`, `5.2.3`, `2.2.1`, `2.1.2`, `2.2.2`, `4.1.1`, `10.1.1`, `10.5.1`, `10.5.2`
 - Cited clauses: `3.2.1`
+- Cited source locators: `manual:3.2.1`
 - Missing evidence: none
 - Missing citations: none
+- Missing source-locator evidence: none
+- Missing source-locator citations: none
 - Missing facts: none
 - Forbidden claims found: none
 - Failure taxonomy: none
@@ -131,10 +142,13 @@ The manual states in §3.2.1: A recipient who is temporarily absent from Calder 
 How long do I have?
 
 - Expected / actual: `REFUSE` / `REFUSE`
-- Retrieved clauses: `10.5.2`, `10.5.1`, `10.5.3`, `7.4.3`, `6.3.3`, `8.2.3`, `7.4.2`, `5.2.2`, `9.6.1`, `6.3.2`, `8.2.2`
+- Retrieved clauses: `10.5.2`, `10.5.1`, `10.5.3`, `9.6.1`, `1.3.2`, `4.1.1`, `9.3.2`, `9.6.2`, `6.3.3`, `1.3.1`, `1.3.3`, `chunk_506c806640ea4c17`
 - Cited clauses: none
+- Cited source locators: none
 - Missing evidence: none
 - Missing citations: none
+- Missing source-locator evidence: none
+- Missing source-locator citations: none
 - Missing facts: none
 - Forbidden claims found: none
 - Failure taxonomy: none
@@ -150,10 +164,13 @@ I don't know based on the current policy manual. The manual does not clearly set
 What about the exceptions?
 
 - Expected / actual: `REFUSE` / `REFUSE`
-- Retrieved clauses: `5.2.2`, `4.2.1`, `3.2.2`, `5.2.1`, `5.2.3`, `4.2.2`, `11.1.2`, `11.4.2`, `8.2.3`, `8.7.1`, `8.7.2`, `11.1.1`
+- Retrieved clauses: `4.2.1`, `4.2.2`, `5.2.2`, `11.1.2`, `11.4.2`, `8.2.3`, `3.2.2`, `5.2.1`, `5.2.3`, `1.3.2`, `8.7.1`, `8.7.2`
 - Cited clauses: none
+- Cited source locators: none
 - Missing evidence: none
 - Missing citations: none
+- Missing source-locator evidence: none
+- Missing source-locator citations: none
 - Missing facts: none
 - Forbidden claims found: none
 - Failure taxonomy: none
@@ -169,10 +186,13 @@ I don't know based on the current policy manual. The manual does not clearly set
 What about appeal deadlines?
 
 - Expected / actual: `ANSWER` / `ANSWER`
-- Retrieved clauses: `12.1.2`, `8.3.1`, `12.1.3`, `12.1.1`, `8.3.2`, `11.2.3`, `8.3.3`, `9.5.2`
+- Retrieved clauses: `9.5.2`, `8.3.1`, `9.5.1`, `12.1.2`, `8.3.3`, `8.3.2`, `12.1.3`, `12.1.1`
 - Cited clauses: `12.1.2`
+- Cited source locators: `manual:12.1.2`
 - Missing evidence: none
 - Missing citations: none
+- Missing source-locator evidence: none
+- Missing source-locator citations: none
 - Missing facts: none
 - Forbidden claims found: none
 - Failure taxonomy: none
@@ -188,10 +208,13 @@ The manual states in §12.1.2: An appeal must be lodged within 30 days of the da
 How do I apply?
 
 - Expected / actual: `ANSWER` / `ANSWER`
-- Retrieved clauses: `8.1.3`, `8.1.1`, `8.1.2`, `9.2.2`, `8.3.1`, `9.2.1`, `1.4.1`
+- Retrieved clauses: `9.2.2`, `8.1.3`, `9.2.1`, `6.1.2`, `8.1.2`, `8.1.1`, `6.4.2`, `chunk_f3d0f57cbfd0b703`, `6.1.1`, `6.3.1`, `6.3.2`, `6.3.3`
 - Cited clauses: `8.1.1`
+- Cited source locators: `manual:8.1.1`
 - Missing evidence: none
 - Missing citations: none
+- Missing source-locator evidence: none
+- Missing source-locator citations: none
 - Missing facts: none
 - Forbidden claims found: none
 - Failure taxonomy: none
@@ -207,10 +230,13 @@ The manual states in §8.1.1: An application may be made online, in person at a 
 What does clause 99.9.9 say?
 
 - Expected / actual: `REFUSE` / `REFUSE`
-- Retrieved clauses: `9.4.2`, `1.4.9`, `9.4.1`, `1.4.8`, `1.4.10`, `1.4.2`, `12.3.1`, `12.2.2`, `6.1.2`, `1.4.1`, `1.4.3`, `12.3.2`
+- Retrieved clauses: `1.4.2`, `12.3.1`, `11.3.1`, `9.4.2`, `12.2.2`, `8.7.2`, `1.4.1`, `1.4.3`, `12.3.2`, `11.3.2`, `9.4.1`
 - Cited clauses: none
+- Cited source locators: none
 - Missing evidence: none
 - Missing citations: none
+- Missing source-locator evidence: none
+- Missing source-locator citations: none
 - Missing facts: none
 - Forbidden claims found: none
 - Failure taxonomy: none
@@ -226,10 +252,13 @@ I don't know based on the current policy manual. The manual does not clearly set
 What does clause 2.4.1 say about cryptocurrency?
 
 - Expected / actual: `REFUSE` / `REFUSE`
-- Retrieved clauses: `2.4.1`, `2.4.2`, `2.4.3`, `6.2.1`, `6.3.1`, `1.3.3`, `6.1.2`, `1.3.2`, `1.4.7`, `6.1.1`, `6.3.2`, `6.3.3`
+- Retrieved clauses: `2.4.1`, `2.4.2`, `2.4.3`, `6.2.1`, `6.3.1`, `11.3.1`, `11.3.2`, `8.2.2`, `1.4.2`, `12.3.1`, `12.1.1`, `8.2.1`
 - Cited clauses: `2.4.1`, `2.4.2`, `2.4.3`, `6.2.1`, `6.3.1`
+- Cited source locators: `manual:2.4.1`, `manual:2.4.2`, `manual:2.4.3`, `manual:6.2.1`, `manual:6.3.1`
 - Missing evidence: none
 - Missing citations: none
+- Missing source-locator evidence: none
+- Missing source-locator citations: none
 - Missing facts: none
 - Forbidden claims found: none
 - Failure taxonomy: none
@@ -245,10 +274,13 @@ I don't know based on the current policy manual. The manual does not clearly set
 Is the district office open on Saturdays?
 
 - Expected / actual: `REFUSE` / `REFUSE`
-- Retrieved clauses: `1.4.11`, `1.4.10`, `1.3.2`, `1.3.1`, `1.3.3`, `1.1.2`, `1.4.9`, `8.1.1`, `1.1.1`, `1.1.3`, `3.3.2`
+- Retrieved clauses: `1.4.11`, `1.4.10`, `1.3.2`, `1.3.1`, `1.3.3`, `1.1.2`, `1.4.9`, `8.1.1`, `1.1.1`, `1.1.3`, `4.3.3`
 - Cited clauses: none
+- Cited source locators: none
 - Missing evidence: none
 - Missing citations: none
+- Missing source-locator evidence: none
+- Missing source-locator citations: none
 - Missing facts: none
 - Forbidden claims found: none
 - Failure taxonomy: none
@@ -264,10 +296,13 @@ I don't know based on the current policy manual. The manual does not clearly set
 Flibbertigibbet zorbles quux?
 
 - Expected / actual: `REFUSE` / `REFUSE`
-- Retrieved clauses: `12.2.2`, `1.3.3`, `1.4.10`, `12.2.1`, `12.2.3`, `11.1.1`, `1.4.9`, `1.3.2`, `2.4.2`, `1.4.11`, `11.1.2`
+- Retrieved clauses: `11.3.2`, `4.3.1`, `8.7.1`, `8.7.2`, `11.3.1`, `4.3.2`, `8.5.1`, `8.5.2`, `8.5.3`, `9.1.1`, `9.4.2`, `11.4.2`
 - Cited clauses: none
+- Cited source locators: none
 - Missing evidence: none
 - Missing citations: none
+- Missing source-locator evidence: none
+- Missing source-locator citations: none
 - Missing facts: none
 - Forbidden claims found: none
 - Failure taxonomy: none
@@ -283,10 +318,13 @@ I don't know based on the current policy manual. The manual does not clearly set
 What is the resource limit, and how is cryptocurrency valued?
 
 - Expected / actual: `REFUSE` / `REFUSE`
-- Retrieved clauses: `2.4.1`, `2.4.2`, `2.4.3`, `6.2.1`, `6.3.1`, `9.5.2`, `9.5.1`, `2.1.2`
+- Retrieved clauses: `2.4.1`, `2.4.2`, `2.4.3`, `6.2.1`, `6.3.1`, `9.5.2`, `2.1.2`, `9.5.1`, `8.3.1`
 - Cited clauses: `2.4.1`, `2.4.2`, `2.4.3`, `6.2.1`, `6.3.1`
+- Cited source locators: `manual:2.4.1`, `manual:2.4.2`, `manual:2.4.3`, `manual:6.2.1`, `manual:6.3.1`
 - Missing evidence: none
 - Missing citations: none
+- Missing source-locator evidence: none
+- Missing source-locator citations: none
 - Missing facts: none
 - Forbidden claims found: none
 - Failure taxonomy: none
@@ -299,13 +337,16 @@ I don't know based on the current policy manual. The manual does not clearly set
 
 ### A13 — PASS
 
-I found both 10 days and 30 days in the manual. Which deadline governs reporting a household change?
+I found both 10 days and 30 days in the manual. Which deadline governs reporting a household change that occurred on 15 February 2026?
 
 - Expected / actual: `CONFLICT` / `CONFLICT`
-- Retrieved clauses: `8.3.1`, `4.3.2`, `8.3.2`, `9.1.4`, `4.3.1`, `4.3.3`, `8.3.3`, `4.3.4`, `9.1.3`, `9.1.5`, `5.2.2`
-- Cited clauses: `4.3.2`, `9.1.4`
+- Retrieved clauses: `4.3.2`, `9.1.4`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_15069ec01b993014`, `chunk_f3d0f57cbfd0b703`
+- Cited clauses: `4.3.2`, `9.1.4`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_15069ec01b993014`, `chunk_f3d0f57cbfd0b703`
+- Cited source locators: `manual:4.3.2`, `manual:9.1.4`, `manual:1.3.2`, `amendment-2026-01:2.1`, `amendment-2026-01:2.2`, `amendment-2026-01:5.2`
 - Missing evidence: none
 - Missing citations: none
+- Missing source-locator evidence: none
+- Missing source-locator citations: none
 - Missing facts: none
 - Forbidden claims found: none
 - Failure taxonomy: none
@@ -313,13 +354,7 @@ I found both 10 days and 30 days in the manual. Which deadline governs reporting
 #### Complete answer (A13)
 
 ```text
-The manual contains conflicting guidance for this question.
-
-§4.3.2: A recipient must report any change in household composition, income, address, or the circumstances of any household member within 10 calendar days of the change occurring, or within 10 calendar days of the recipient becoming aware of the change, whichever is later.
-
-§9.1.4: Where an overpayment has arisen from a change of circumstances, and the recipient reported the change within the 30 calendar days required under §4.3, no overpayment shall be established in respect of any period before the date on which the Department was in a position to act on the report.
-
-Because the manual does not establish which rule controls, I cannot provide a single answer.
+The change occurred on 15 February 2026, so the pre-amendment wording remains applicable. Section 4.3.2 says the change must be reported within 10 calendar days of the change or awareness, whichever is later. Section 9.1.4 instead describes 30 calendar days as the period required under §4.3 for its overpayment protection. The amendment does not retroactively align those provisions, so I cannot give one conflict-free deadline for this pre-March change.
 ```
 
 ### A14 — PASS
@@ -327,10 +362,13 @@ Because the manual does not establish which rule controls, I cannot provide a si
 Where can I get resource and referral assistance?
 
 - Expected / actual: `REFUSE` / `REFUSE`
-- Retrieved clauses: `2.4.1`, `2.3.2`, `2.4.3`, `2.4.2`, `10.2.3`, `2.3.1`, `5.5.2`, `8.3.3`, `10.2.2`, `10.2.4`
+- Retrieved clauses: `2.3.2`, `10.2.3`, `2.3.1`, `5.5.2`, `8.3.3`, `10.2.2`, `10.2.4`, `5.5.1`, `8.3.2`, `2.4.1`, `2.4.3`
 - Cited clauses: none
+- Cited source locators: none
 - Missing evidence: none
 - Missing citations: none
+- Missing source-locator evidence: none
+- Missing source-locator citations: none
 - Missing facts: none
 - Forbidden claims found: none
 - Failure taxonomy: none
@@ -346,10 +384,13 @@ I don't know based on the current policy manual. The manual does not clearly set
 Where can I get resorce and referral assistance?
 
 - Expected / actual: `REFUSE` / `REFUSE`
-- Retrieved clauses: `2.3.2`, `10.2.3`, `2.3.1`, `5.5.2`, `8.3.3`, `10.2.2`, `10.2.4`, `5.5.1`, `8.3.2`, `8.2.1`, `2.4.1`
+- Retrieved clauses: `2.3.2`, `10.2.3`, `2.3.1`, `5.5.2`, `8.3.3`, `10.2.2`, `10.2.4`, `5.5.1`, `8.3.2`, `2.4.1`, `2.4.3`
 - Cited clauses: none
+- Cited source locators: none
 - Missing evidence: none
 - Missing citations: none
+- Missing source-locator evidence: none
+- Missing source-locator citations: none
 - Missing facts: none
 - Forbidden claims found: none
 - Failure taxonomy: none

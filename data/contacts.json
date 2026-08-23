@@ -2,6 +2,14 @@
   "document_id": "calder-hsp-policy-manual",
   "consolidated_as_of": "2025-12-31",
   "source_verified": true,
+  "reviewed_amendments": [
+    {
+      "document_id": "calder-hsp-amendment-2026-01",
+      "amendment_number": "2026-01",
+      "effective_date": "2026-03-01",
+      "source_verified": true
+    }
+  ],
   "default": {
     "next_step": "Ask a Department caseworker at one of the four district offices for an official interpretation.",
     "source_clause_ids": [

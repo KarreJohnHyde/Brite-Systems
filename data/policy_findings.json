@@ -5,6 +5,14 @@
   "consolidated_as_of": "2025-12-31",
   "source_path": "data/policy-manual.md",
   "source_verified": true,
+  "reviewed_amendments": [
+    {
+      "document_id": "calder-hsp-amendment-2026-01",
+      "amendment_number": "2026-01",
+      "effective_date": "2026-03-01",
+      "source_verified": true
+    }
+  ],
   "conflicts": [
     {
       "id": "CONFLICT-001",
@@ -27,7 +35,8 @@
         "how many.*report.*change",
         "failure to report.*(?:day|deadline|time)"
       ],
-      "explanation": "Clause 4.3.2 requires a recipient to report a change within 10 calendar days, while clause 9.1.4 describes 30 calendar days as the period required under section 4.3. The manual supplies no precedence rule that resolves the two deadlines.",
+      "temporal_scope": "A change of circumstances occurring before 1 March 2026. Amendment No. 2026-01 paragraphs 2.1, 2.2, and 5.2 align both figures at 14 days only for changes occurring on or after that date.",
+      "explanation": "For a change occurring before 1 March 2026, clause 4.3.2 requires reporting within 10 calendar days, while clause 9.1.4 describes 30 calendar days as the period required under section 4.3. The pre-amendment manual supplies no precedence rule that resolves the two deadlines.",
       "source_verified": true
     },
     {
@@ -57,7 +66,8 @@
         "(?:reduce|reduction|ineligible|excluded).*sanction",
         "miss.*interview.*sanction"
       ],
-      "explanation": "Clause 4.1.1(a) says that a person subject to an unexpired sanction under section 10.5 is excluded from eligibility, while clause 10.5.2 defines a sanction as a 20 per cent reduction of the monthly award for 4 or 8 weeks. The manual does not explain whether exclusion or reduction controls or whether the effects are cumulative.",
+      "temporal_scope": "All determinations. Amendment No. 2026-01 changes the reduction from 20 to 15 per cent for determinations on or after 1 March 2026, but does not resolve the exclusion-versus-reduction conflict.",
+      "explanation": "Clause 4.1.1(a) says that a person subject to an unexpired sanction under section 10.5 is excluded from eligibility, while clause 10.5.2 defines a sanction as a percentage reduction of the monthly award for 4 or 8 weeks. The manual does not explain whether exclusion or reduction controls or whether the effects are cumulative.",
       "source_verified": true
     }
   ],

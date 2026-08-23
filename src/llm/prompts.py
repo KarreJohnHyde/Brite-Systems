@@ -138,8 +138,6 @@ def format_policy_contexts(contexts: Sequence[PolicyChunk]) -> str:
         lines.append(f"section title: {chunk.section_title or 'Untitled Section'}")
         if chunk.effective_date:
             lines.append(f"effective date: {chunk.effective_date}")
-        if chunk.effective_to:
-            lines.append(f"effective to: {chunk.effective_to}")
         lines.append(f"text: {chunk.text}")
     return "\n".join(lines)
 

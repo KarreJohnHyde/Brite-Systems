@@ -6,17 +6,20 @@ an autonomous benefits or legal decision-maker.
 
 ## 1. Architecture decision: explicit evidence pipeline
 
-**Decision:** Keep parsing, indexing, retrieval, evidence assessment,
-contradiction detection, decision logic, answer construction, provider access,
-citation validation, and presentation as separate components.
+**Decision:** Keep source parsing, temporal applicability, indexing, retrieval,
+evidence assessment, contradiction detection, decision logic, answer
+construction, provider access, citation validation, and presentation as separate
+components.
 
 **Why:** A monolithic RAG chain makes it difficult to distinguish a retrieval
 miss from insufficient support, a missed conflict, a generation error, or a bad
 citation. The composition root in `src/pipeline.py` makes the order explicit:
 
 ```text
-retrieve → assess support → detect conflicts/gaps → decide
-         → build answer/refusal/conflict → validate citations
+parse source bundle → validate timeline → resolve controlling date
+                    → retrieve when needed → assess support
+                    → detect conflicts/gaps → decide
+                    → build answer/refusal/conflict → validate citations
 ```
 
 Generation occurs only after the state machine decides. There is no answer-first
@@ -26,29 +29,32 @@ or post-hoc citation-matching path.
 inspectable and a day-two change can replace one stage without rewriting the
 whole application.
 
-## 2. Parsing decision: preserve the supplied Markdown structure
+## 2. Parsing decision: preserve the supplied Markdown sources
 
 **Decision:** Parse the actual `data/policy-manual.md` hierarchy of Parts,
-sections, numbered clauses, sub-items, and tables. Do not use fixed character
-windows as the primary chunking strategy.
+sections, numbered clauses, sub-items, and tables, plus
+`data/amendment-2026-01.md` paragraph structure and inserted text. Do not use
+fixed character windows as the primary chunking strategy.
 
-The source identifies itself as the Calder County Household Support Program
+The base source identifies itself as the Calder County Household Support Program
 Policy Manual, consolidated as at 31 December 2025, and says that all named
-entities and case details are fictitious. No synthetic replacement corpus is
-generated.
+entities and case details are fictitious. Amendment No. 2026-01 is an additional
+authority effective 1 March 2026, not a synthetic replacement consolidated
+manual. Challenge instructions and Finder metadata are not evidence sources.
 
 Each `PolicyChunk` preserves:
 
 - exact source text separately from normalized retrieval text;
-- official clause, section, and part identifiers;
+- official clause, section, and part identifiers or an amendment paragraph
+  locator;
 - source order, line range, UTF-8 offsets, and cross-references;
-- document name and version metadata; and
+- document name, source kind, effective date, and version metadata; and
 - a deterministic opaque chunk ID derived from trusted source content.
 
-The Markdown source has no authoritative pages. The system records `page=None`
-and renders exact clause and line citations instead of inventing page numbers.
-Ingestion also records the corpus SHA-256 and refuses to load an index built from
-a different source file.
+The Markdown sources have no authoritative pages. The system records `page=None`
+and renders exact manual-clause or amendment-paragraph citations with line ranges
+instead of inventing page numbers. Ingestion records a source-bundle SHA-256 and
+refuses to load an index built from different authoritative sources.
 
 ## 3. Retrieval decision: deterministic hybrid baseline
 
@@ -80,8 +86,8 @@ passes independent support assessment.
 ### 3.1 Local training and promotion decision
 
 **Decision:** Training is limited to the Sentence Transformer bi-encoder and
-CrossEncoder reranker. Do not fine-tune the answer generator from these files:
-the 33 canonical cases contain decisions, evidence IDs, facts, and forbidden
+CrossEncoder reranker. Do not fine-tune the answer generator from the
+source-derived labels: they contain decisions, evidence IDs, facts, and forbidden
 claims, but no human-authored target answers. Gemini is hosted and outside this
 local training boundary. Hashing, BM25, FAISS `IndexFlatIP`, and deterministic
 safety logic have no learned parameters.
@@ -93,12 +99,10 @@ other fold. Final all-data artifacts are explicitly in-sample candidates, not
 test evidence. Local model directories and their separate FAISS index are
 immutable and SHA-256 bound; required-reranker evaluation fails closed.
 
-The 23 August 2026 seed-42 run kept the pretrained profile as the recommendation.
-Held-out reranked Recall@6 was unchanged at `0.646`; MRR rose only from `0.8359`
-to `0.8369`, while pairwise ROC AUC fell from `0.6535` to `0.6407`. The trained
-candidate passed all 18 core and 15 adversarial end-to-end cases, but this does
-not overcome the small reviewed sample, single seed, and lack of a blind staff
-query set. Candidate promotion requires a new intent-grouped blind set, no safety
+Earlier training artifacts are preserved as historical experiments, not as
+evidence that a candidate remains safe after a source-bundle or timeline change.
+The small reviewed sample, single seed, and lack of a blind staff-query set mean
+that candidate promotion requires fresh amendment-aware evaluation, no safety
 regression, and a material held-out ranking improvement.
 
 ## 4. Evidence decision: relevance is not support
@@ -112,8 +116,9 @@ alignment, and retrieval signals. These values are transparent heuristics, not
 probabilities. A top-ranked passage cannot authorize `ANSWER` merely because it
 is semantically similar.
 
-Human-reviewed corpus findings live in `data/policy_findings.json`. They are
-metadata about the unchanged source, not corrected policy rules.
+Human-reviewed source findings live in `data/policy_findings.json`, while
+date-bound amendment operations live in `data/policy_timeline.json`. They are
+metadata about the authoritative sources, not corrected or invented policy rules.
 
 ## 5. Refusal boundary
 
@@ -122,8 +127,9 @@ established.
 
 The decision engine returns `REFUSE` when any of the following applies:
 
-1. A standalone question supplies no policy anchor or depends on missing
-   conversational context, such as “How long do I have?” or “What about the exceptions?”
+1. A standalone question supplies no policy anchor, depends on missing
+   conversational context, or omits a legally controlling date, such as “How long
+   do I have?” when an amendment makes the event date decisive.
 2. A reviewed manual gap matches the material question.
 3. The question asks for an individual determination or case-history explanation
    that requires facts or records not supplied by the manual.
@@ -133,13 +139,14 @@ The decision engine returns `REFUSE` when any of the following applies:
 7. The best direct support is below the configured refusal threshold.
 8. Neither optional model phrasing nor the trusted-source fallback can produce
    a valid answer contract.
-9. The index and current corpus, reviewed metadata, or selected embedding backend do not match; in
-   this case the command fails safely and asks for re-ingestion.
+9. The index and current source bundle, reviewed metadata/timeline, or selected
+   embedding backend do not match; in this case the command fails safely and asks
+   for re-ingestion.
 
-The deterministic refusal wording states that the manual does not clearly settle
-the question. The next step comes from source-backed organizational roles in
-`data/contacts.json`; no phone number, email address, or personal name is
-invented.
+The deterministic refusal wording states that the authoritative policy sources
+do not clearly settle the question. The next step comes from source-backed
+organizational roles in `data/contacts.json`; no phone number, email address, or
+personal name is invented.
 
 **Rationale:** In this domain, false answers can cause users to miss deadlines,
 misstate eligibility, or take action on a rule the source never established.
@@ -147,8 +154,9 @@ Precision and citation integrity are therefore prioritized over answer coverage.
 
 ## 6. Contradiction handling
 
-**Decision:** Return `CONFLICT` before considering `ANSWER` when relevant clauses
-are materially incompatible and the manual provides no precedence rule.
+**Decision:** Return `CONFLICT` before considering `ANSWER` when relevant
+provisions are materially incompatible and the authoritative sources provide no
+date-appropriate precedence rule.
 
 The detector combines:
 
@@ -163,15 +171,20 @@ sources, explain why no single rule controls, and provide escalation guidance.
 
 Confirmed source issues currently include:
 
-- §4.3.2 versus §9.1.4 on a 10-day versus 30-day change-reporting period; and
-- §4.1.1 versus §10.5.2 on exclusion from eligibility versus a 20% award
-  reduction as the effect of a sanction.
+- for a change occurring before 1 March 2026, §4.3.2 versus §9.1.4 on a 10-day
+  versus 30-day reporting period; amendment ¶5.2 retains the historical period
+  but does not choose between those inconsistent base provisions;
+- for a change occurring on or after 1 March 2026, amendment ¶¶2.1 and 2.2 align
+  both provisions to 14 days, using the change-occurrence date; and
+- §4.1.1 versus §10.5.2 on exclusion from eligibility versus an award reduction
+  as the effect of a sanction. Amendment ¶4.1 changes the reduction to 15% for a
+  post-effective determination, but does not resolve that separate conflict.
 
 ## 7. Known-gap handling
 
-**Decision:** Record reviewed gaps outside the manual and use them to force a
-transparent refusal for matching questions. Do not insert missing rules into the
-corpus.
+**Decision:** Record reviewed gaps outside the authoritative sources and use them
+to force a transparent refusal for matching questions. Do not insert missing
+rules into the source bundle.
 
 Reviewed gaps include the broken full-time-student needs cross-reference,
 full-time-education absence, classification or valuation of unlisted resources,
@@ -192,8 +205,8 @@ DIRECT_COVERAGE_THRESHOLD=0.34
 
 `python main.py calibrate --embedding-backend hashing` sweeps candidate support
 thresholds. `python main.py evaluate --embedding-backend hashing` is the release
-check. Any backend, corpus, model, or retrieval-setting change requires the
-calibration and evaluation to be rerun.
+check. Any backend, source bundle, timeline, model, or retrieval-setting change
+requires calibration and evaluation to be rerun.
 
 Threshold selection must inspect the error types, not only aggregate accuracy.
 The governing priority is:
@@ -221,15 +234,15 @@ unknown or duplicate IDs, and enforces the state contract:
 - `CONFLICT` requires at least two trusted citations; and
 - `REFUSE` never fabricates supporting evidence.
 
-Claim validation also rejects obvious invented official clause IDs and numeric
-values absent from the selected sources. A validation failure becomes `REFUSE`,
-not a warning attached to an unsafe answer.
+Claim validation also rejects obvious invented manual clause IDs, amendment
+paragraph locators, and numeric values absent from the selected sources. A
+validation failure becomes `REFUSE`, not a warning attached to an unsafe answer.
 
 Persisted FAISS and metadata artifacts carry SHA-256 checksums. At load time,
-the program also reparses the authoritative corpus and requires every indexed
-citation field—including exact text, official ID, offsets, and line range—to
-match that source-derived record. The manifest alone is not treated as proof of
-citation truth.
+the program also reparses the authoritative source bundle and requires every
+indexed citation field—including exact text, source locator, offsets, and line
+range—to match that source-derived record. The manifest alone is not treated as
+proof of citation truth.
 
 ## 10. Answer-construction and provider decision
 
@@ -269,14 +282,16 @@ text as untrusted data.
 thresholds, and provider settings in the validated `Settings` model. Precedence
 is explicit CLI override, then environment/`.env`, then safe defaults.
 
-The parser converts any valid English consolidated date to ISO form rather than
-hard-coding one release. Reviewed findings and escalation metadata must declare
-the same document and consolidated date and may cite only clauses in the active
-corpus. Streamlit cache identity includes those files, the corpus, and the index
-manifest so a quarterly update invalidates the in-memory pipeline.
+The parser converts valid English source dates to ISO form rather than
+hard-coding one release. Settings bind the base manual, optional amendment, and
+policy timeline into one validated source bundle. Reviewed findings, timeline
+rules, and escalation metadata must declare compatible reviewed source identities
+and may cite only locators present in that bundle. Streamlit cache identity
+includes those files and the index manifest so a quarterly update invalidates the
+in-memory pipeline.
 
 The generated index and processed chunks are reproducible artifacts and are not
-committed. The source corpus, reviewed findings, escalation descriptions,
+committed. The source bundle, reviewed timeline/findings, escalation descriptions,
 evaluation labels, and documentation are committed.
 
 ## 13. Observability and tracing decision
@@ -317,15 +332,15 @@ case questions or policy text to another service.
 
 ## 15. Known failure modes
 
-1. Novel paraphrases or vocabulary outside the manual can cause retrieval misses
-   or false refusals.
+1. Novel paraphrases or vocabulary outside the authoritative source bundle can
+   cause retrieval misses or false refusals.
 2. Compound questions may be split imperfectly, causing a false refusal or an
    incomplete source selection.
 3. Numeric conflict rules can confuse a scoped exception with a contradiction;
    the detector is deliberately conservative and reviewed findings take priority.
 4. A contradiction or gap not yet represented in reviewed metadata can be missed.
-5. Line citations change if the source file is reformatted; the corpus digest
-   forces re-ingestion but cannot preserve old line numbers.
+5. Line citations change if a source file is reformatted; the source-bundle
+   digest forces re-ingestion but cannot preserve old line numbers.
 6. Sentence Transformer and reranker behavior depends on downloaded model files,
    hardware, and library versions; it must be evaluated separately from hashing.
 7. Gemini behavior and service availability are external variables. Provider
@@ -333,10 +348,55 @@ case questions or policy text to another service.
 8. The parser is tailored to the supplied numbered Markdown structure and does
    not handle scanned PDFs or arbitrary manual layouts.
 9. The system has no case record, external statute, or regulatory database. It
-   cannot determine source precedence beyond what the manual itself establishes.
+   applies only the explicit amendment precedence and transition rules recorded
+   in the reviewed timeline; it cannot infer an unstated rule or resolve an
+   ambiguity the authoritative sources leave open.
 10. Evaluation cases demonstrate selected behavior but cannot prove that every
     possible wording or policy issue is handled.
 
 These limitations are release information, not optional future clean-up. New
 failures should be classified, preserved as regression cases, and repaired in
 the responsible component.
+
+## 16. Day-2 amendment decision record
+
+### Source-authority audit
+
+The base policy authority is `data/policy-manual.md`. Amendment No. 2026-01,
+stored as `data/amendment-2026-01.md`, is a second authority effective 1 March
+2026 and amends rather than replaces that manual. The challenge DOCX, the data
+pack README, and `READ ME FIRST.md` supply requirements but never evidence for a
+policy answer. `.DS_Store` is Finder metadata and is excluded from parsing,
+retrieval, and citations.
+
+### What changed
+
+- The parser, index manifest, citations, and source lookups now retain both
+  manual-clause and amendment-paragraph provenance.
+- `data/policy_timeline.json` records source-verified amendment operations and
+  `src/temporal.py` resolves them before ordinary retrieval when a question is
+  amendment-sensitive.
+- Paragraphs 1, 3, and 4 use the determination date under amendment ¶5.1;
+  paragraph 2 uses the date the change of circumstances occurred under ¶5.2.
+  A period spanning 1 March uses figures in force on each day and is apportioned
+  under ¶5.3 and §7.4.3.
+- A missing legally controlling date is a refusal/clarification condition, not
+  permission to use today's value. Date-sensitive cases must be added to the
+  evaluation set and rerun with every timeline update.
+
+### What did not change
+
+The three-state `ANSWER` / `CONFLICT` / `REFUSE` contract, source-first answer
+construction, citation validation, policy-gap handling, and prohibition on
+inventing facts or escalation contacts remain unchanged. The amendment is not
+treated as a reason to silently repair base-manual ambiguity: where its transition
+does not settle a historical conflict, the result remains `CONFLICT`.
+
+### Hindsight
+
+Had the amendment been known on Day 1, policy sources, effective dates,
+supersession rules, and controlling-fact requirements would have been modeled as
+first-class ingestion data from the start. The original component boundaries made
+the correction localized, but baseline evaluation claims and demos still needed
+to be revisited; future policy work should establish a timeline test matrix before
+publishing aggregate results.

@@ -51,6 +51,15 @@ class CitationValidator:
                 line_start=chunk.line_start,
                 line_end=chunk.line_end,
                 excerpt=chunk.text,
+                document_id=chunk.document_id,
+                document_name=chunk.document_name,
+                document_title=chunk.document_title,
+                source_kind=chunk.source_kind,
+                amendment_number=chunk.amendment_number,
+                effective_date=chunk.effective_date,
+                locator_kind=chunk.locator_kind,
+                source_locator=chunk.source_locator,
+                source_locator_label=chunk.source_locator_label,
             )
             for chunk in chunks
         ]
@@ -80,7 +89,7 @@ class CitationValidator:
             )
 
         allowed_clauses = {chunk.clause_id for chunk in chunks if chunk.clause_id}
-        referenced_clauses = set(CLAUSE_REFERENCE_RE.findall(answer))
+        referenced_clauses = {clause.rstrip(".") for clause in CLAUSE_REFERENCE_RE.findall(answer)}
         invented_clauses = sorted(referenced_clauses - allowed_clauses)
         if invented_clauses:
             raise CitationIntegrityError(

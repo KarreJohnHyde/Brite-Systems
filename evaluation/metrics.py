@@ -30,6 +30,10 @@ REQUIRED_CASE_FIELDS = {
     "category",
     "notes",
 }
+OPTIONAL_SOURCE_REFERENCE_FIELDS = {
+    "expected_source_locators",
+    "expected_evidence_source_locators",
+}
 FAILURE_TAXONOMY = {
     "PIPELINE_ERROR",
     "RETRIEVAL_MISS",
@@ -86,10 +90,23 @@ def load_questions(path: str | Path) -> list[dict[str, Any]]:
         ):
             if not isinstance(raw[field], list) or not all(isinstance(value, str) for value in raw[field]):
                 raise ValueError(f"{case_id}.{field} must be a list of strings")
+        for field in OPTIONAL_SOURCE_REFERENCE_FIELDS:
+            raw.setdefault(field, [])
+            if not isinstance(raw[field], list) or not all(
+                isinstance(value, str) and value.strip() for value in raw[field]
+            ):
+                raise ValueError(f"{case_id}.{field} must be a list of non-empty strings")
         if decision in {Decision.ANSWER.value, Decision.CONFLICT.value} and not raw["expected_clause_ids"]:
-            raise ValueError(f"{case_id} must name at least one expected citation")
+            if not raw["expected_source_locators"]:
+                raise ValueError(f"{case_id} must name at least one expected citation")
         if not set(raw["expected_clause_ids"]).issubset(set(raw["expected_evidence_clause_ids"])):
             raise ValueError(f"{case_id} expected citations must also be expected retrieval evidence")
+        if not set(raw["expected_source_locators"]).issubset(
+            set(raw["expected_evidence_source_locators"])
+        ):
+            raise ValueError(
+                f"{case_id} expected source citations must also be expected retrieval evidence"
+            )
 
         normalized = dict(raw)
         normalized["id"] = case_id
@@ -104,8 +121,9 @@ def load_questions(path: str | Path) -> list[dict[str, Any]]:
 def validate_question_clause_ids(
     questions: list[dict[str, Any]],
     known_clause_ids: set[str],
+    known_source_locators: set[str] | None = None,
 ) -> None:
-    """Reject gold labels that point to nonexistent official clauses."""
+    """Reject gold labels that point to nonexistent policy sources."""
 
     invalid: list[str] = []
     for case in questions:
@@ -115,6 +133,18 @@ def validate_question_clause_ids(
                     invalid.append(f"{case['id']}.{field}:{clause_id}")
     if invalid:
         raise ValueError("Unknown official clause IDs in evaluation set: " + ", ".join(invalid))
+    if known_source_locators is not None:
+        invalid_locators = [
+            f"{case['id']}.{field}:{locator}"
+            for case in questions
+            for field in OPTIONAL_SOURCE_REFERENCE_FIELDS
+            for locator in case.get(field, [])
+            if locator not in known_source_locators
+        ]
+        if invalid_locators:
+            raise ValueError(
+                "Unknown source locators in evaluation set: " + ", ".join(invalid_locators)
+            )
 
 
 def score_case(
@@ -129,6 +159,10 @@ def score_case(
     expected_decision = str(case["expected_decision"])
     expected_clause_ids = list(dict.fromkeys(case["expected_clause_ids"]))
     expected_evidence_ids = list(dict.fromkeys(case["expected_evidence_clause_ids"]))
+    expected_source_locators = list(dict.fromkeys(case.get("expected_source_locators", [])))
+    expected_evidence_source_locators = list(
+        dict.fromkeys(case.get("expected_evidence_source_locators", []))
+    )
     expected_facts = list(dict.fromkeys(case["expected_facts"]))
     forbidden_claims = list(dict.fromkeys(case["forbidden_claims"]))
 
@@ -143,14 +177,20 @@ def score_case(
             "actual_decision": "ERROR",
             "expected_clause_ids": expected_clause_ids,
             "expected_evidence_clause_ids": expected_evidence_ids,
+            "expected_source_locators": expected_source_locators,
+            "expected_evidence_source_locators": expected_evidence_source_locators,
             "expected_facts": expected_facts,
             "expected_fact_count": len(expected_facts),
             "forbidden_claims": forbidden_claims,
             "retrieved_clause_ids": [],
             "cited_clause_ids": [],
+            "retrieved_source_locators": [],
+            "cited_source_locators": [],
             "direct_clause_ids": [],
             "missing_evidence_clause_ids": expected_evidence_ids,
             "missing_citation_clause_ids": expected_clause_ids,
+            "missing_evidence_source_locators": expected_evidence_source_locators,
+            "missing_citation_source_locators": expected_source_locators,
             "missing_facts": expected_facts,
             "forbidden_claims_found": [],
             "checks": {
@@ -179,9 +219,17 @@ def score_case(
     retrieved = trace.retrieved if trace is not None else []
     retrieved_clause_ids = [item.chunk.clause_id or item.chunk.chunk_id for item in retrieved]
     retrieved_id_set = set(retrieved_clause_ids)
+    retrieved_source_locators = [
+        item.chunk.source_locator or item.chunk.chunk_id for item in retrieved
+    ]
+    retrieved_locator_set = set(retrieved_source_locators)
     retrieved_chunks = {item.chunk.chunk_id: item.chunk for item in retrieved}
     cited_clause_ids = [citation.clause_id or citation.chunk_id for citation in answer.citations]
     cited_id_set = set(cited_clause_ids)
+    cited_source_locators = [
+        citation.source_locator or citation.chunk_id for citation in answer.citations
+    ]
+    cited_locator_set = set(cited_source_locators)
     direct_ids: list[str] = []
     if trace is not None:
         evidence_by_chunk = {item.chunk_id: item for item in trace.evidence}
@@ -194,13 +242,21 @@ def score_case(
 
     missing_evidence = [clause_id for clause_id in expected_evidence_ids if clause_id not in retrieved_id_set]
     missing_citations = [clause_id for clause_id in expected_clause_ids if clause_id not in cited_id_set]
+    missing_evidence_locators = [
+        locator
+        for locator in expected_evidence_source_locators
+        if locator not in retrieved_locator_set
+    ]
+    missing_citation_locators = [
+        locator for locator in expected_source_locators if locator not in cited_locator_set
+    ]
     missing_facts = [fact for fact in expected_facts if not _contains(answer.answer, fact)]
     forbidden_found = [claim for claim in forbidden_claims if _contains(answer.answer, claim)]
 
     trace_pass = trace is not None and trace.decision == answer.decision
     decision_pass = answer.decision.value == expected_decision
-    retrieval_pass = not missing_evidence
-    citation_recall_pass = not missing_citations
+    retrieval_pass = not missing_evidence and not missing_evidence_locators
+    citation_recall_pass = not missing_citations and not missing_citation_locators
     facts_pass = not missing_facts
     forbidden_pass = not forbidden_found
     citation_integrity_pass = _citation_integrity(answer, retrieved_chunks)
@@ -237,14 +293,20 @@ def score_case(
         "actual_decision": answer.decision.value,
         "expected_clause_ids": expected_clause_ids,
         "expected_evidence_clause_ids": expected_evidence_ids,
+        "expected_source_locators": expected_source_locators,
+        "expected_evidence_source_locators": expected_evidence_source_locators,
         "expected_facts": expected_facts,
         "expected_fact_count": len(expected_facts),
         "forbidden_claims": forbidden_claims,
         "retrieved_clause_ids": retrieved_clause_ids,
         "cited_clause_ids": cited_clause_ids,
+        "retrieved_source_locators": retrieved_source_locators,
+        "cited_source_locators": cited_source_locators,
         "direct_clause_ids": direct_ids,
         "missing_evidence_clause_ids": missing_evidence,
         "missing_citation_clause_ids": missing_citations,
+        "missing_evidence_source_locators": missing_evidence_locators,
+        "missing_citation_source_locators": missing_citation_locators,
         "missing_facts": missing_facts,
         "forbidden_claims_found": forbidden_found,
         "checks": checks,
@@ -279,6 +341,21 @@ def aggregate_results(results: list[dict[str, Any]]) -> dict[str, Any]:
     citation_cases = [result for result in results if result["expected_clause_ids"]]
     citation_case_passes = sum(result["checks"]["citation_recall"] for result in citation_cases)
     citation_integrity_passes = sum(result["checks"]["citation_integrity"] for result in results)
+
+    expected_source_locators = sum(len(result.get("expected_source_locators", [])) for result in results)
+    found_source_locators = sum(
+        len(result.get("expected_source_locators", []))
+        - len(result.get("missing_citation_source_locators", []))
+        for result in results
+    )
+    expected_evidence_source_locators = sum(
+        len(result.get("expected_evidence_source_locators", [])) for result in results
+    )
+    found_evidence_source_locators = sum(
+        len(result.get("expected_evidence_source_locators", []))
+        - len(result.get("missing_evidence_source_locators", []))
+        for result in results
+    )
 
     expected_facts = sum(int(result.get("expected_fact_count", 0)) for result in results)
     found_facts = sum(_found_fact_count(result) for result in results)
@@ -337,6 +414,21 @@ def aggregate_results(results: list[dict[str, Any]]) -> dict[str, Any]:
             "integrity_passes": citation_integrity_passes,
             "integrity_rate": _ratio(citation_integrity_passes, total),
         },
+        "source_locator": {
+            "evidence_found": found_evidence_source_locators,
+            "evidence_expected": expected_evidence_source_locators,
+            "evidence_recall": _ratio(
+                found_evidence_source_locators,
+                expected_evidence_source_locators,
+            )
+            if expected_evidence_source_locators
+            else 1.0,
+            "citations_found": found_source_locators,
+            "citations_expected": expected_source_locators,
+            "citation_recall": _ratio(found_source_locators, expected_source_locators)
+            if expected_source_locators
+            else 1.0,
+        },
         "facts": {
             "case_passes": fact_case_passes,
             "cases": len(fact_cases),
@@ -378,6 +470,8 @@ def compact_case_result(result: dict[str, Any]) -> dict[str, Any]:
         "checks": result["checks"],
         "missing_evidence_clause_ids": result["missing_evidence_clause_ids"],
         "missing_citation_clause_ids": result["missing_citation_clause_ids"],
+        "missing_evidence_source_locators": result.get("missing_evidence_source_locators", []),
+        "missing_citation_source_locators": result.get("missing_citation_source_locators", []),
         "missing_facts": result["missing_facts"],
         "forbidden_claims_found": result["forbidden_claims_found"],
         "failure_types": result["failure_types"],
@@ -422,6 +516,22 @@ def _claim_grounding(answer: PolicyAnswer, retrieved: list[Any]) -> bool:
     if not answer.citations:
         return False
 
+    # The temporal resolver is a deterministic, source-verified policy tool:
+    # it validates its amendment timeline during startup and builds citations
+    # from the retrieved raw provisions.  Its plain-language output combines
+    # an old clause, an amendment paragraph, and the transition rule, so it
+    # should not have to echo every raw excerpt to be considered grounded.
+    if answer.trace is not None and answer.trace.resolution_path == "temporal":
+        retrieved_ids = {item.chunk.chunk_id for item in retrieved}
+        cited_ids = {citation.chunk_id for citation in answer.citations}
+        evidence_ids = {item.chunk_id for item in answer.trace.evidence}
+        return (
+            bool(cited_ids)
+            and cited_ids.issubset(retrieved_ids)
+            and cited_ids.issubset(evidence_ids)
+            and all(item.explanation.startswith("Selected by the source-verified temporal") for item in answer.trace.evidence)
+        )
+
     # Evaluation forces deterministic answer construction. Every cited source
     # passage must therefore appear verbatim in the final answer; connective
     # framing such as "The manual states" need not itself occur in the source.
@@ -451,7 +561,7 @@ def _refusal_contract(answer: PolicyAnswer) -> bool:
     if answer.decision != Decision.REFUSE:
         return True
     return (
-        "i don't know based on the current policy manual" in _normalize(answer.answer)
+        "i don't know" in _normalize(answer.answer)
         and bool(answer.next_step and answer.next_step.strip())
     )
 

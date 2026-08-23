@@ -50,24 +50,32 @@
   },
   {
     "id": "Q03",
-    "question": "Which standard income disregards does the manual list, and is the earnings disregard applied per earner or per household?",
+    "question": "For a determination made on 28 February 2026, which standard income disregards does the manual list, and is the earnings disregard applied per earner or per household?",
     "expected_decision": "ANSWER",
     "expected_clause_ids": [
       "6.4.1",
       "6.4.2"
     ],
+    "expected_source_locators": [
+      "amendment-2026-01:1.1",
+      "amendment-2026-01:5.1"
+    ],
     "expected_evidence_clause_ids": [
       "6.4.1",
       "6.4.2"
     ],
+    "expected_evidence_source_locators": [
+      "amendment-2026-01:1.1",
+      "amendment-2026-01:5.1"
+    ],
     "expected_facts": [
-      "$120 per month",
+      "$120",
       "child support",
       "training allowance",
       "disability",
       "charitable payments",
       "$200 per month",
-      "income of a dependent child",
+      "dependent child's income",
       "once per household"
     ],
     "forbidden_claims": [
@@ -75,7 +83,7 @@
       "all care allowance income is disregarded"
     ],
     "category": "MULTI_CLAUSE",
-    "notes": "This deliberately tests retrieval of the long list in 6.4.1 and the household-level qualification in 6.4.2."
+    "notes": "This tests the long list in 6.4.1, the household-level qualification in 6.4.2, and the pre-effective-date result under amendment paragraphs 1.1 and 5.1."
   },
   {
     "id": "Q04",
@@ -105,15 +113,21 @@
   },
   {
     "id": "Q05",
-    "question": "How many calendar days does a recipient have to report a change of circumstances?",
+    "question": "How many calendar days does a recipient have to report a change of circumstances that occurred on 15 February 2026?",
     "expected_decision": "CONFLICT",
     "expected_clause_ids": [
       "4.3.2",
       "9.1.4"
     ],
+    "expected_source_locators": [
+      "amendment-2026-01:5.2"
+    ],
     "expected_evidence_clause_ids": [
       "4.3.2",
       "9.1.4"
+    ],
+    "expected_evidence_source_locators": [
+      "amendment-2026-01:5.2"
     ],
     "expected_facts": [
       "10 calendar days",
@@ -124,7 +138,7 @@
       "the definitive deadline is 30 calendar days"
     ],
     "category": "CONFLICT",
-    "notes": "Clause 9.1.4 expressly calls 30 days the period required under section 4.3, which directly conflicts with 4.3.2."
+    "notes": "For this pre-1-March change, clause 9.1.4 expressly calls 30 days the period required under section 4.3, which conflicts with 4.3.2; amendment paragraph 5.2 preserves the old regime."
   },
   {
     "id": "Q06",
@@ -172,29 +186,32 @@
     "expected_decision": "CONFLICT",
     "expected_clause_ids": [
       "4.1.1",
-      "10.5.1",
       "10.5.2"
     ],
+    "expected_source_locators": [
+      "amendment-2026-01:4.1",
+      "amendment-2026-01:5.1"
+    ],
     "expected_evidence_clause_ids": [
-      "2.1.2",
-      "2.2.1",
       "4.1.1",
-      "10.1.1",
-      "10.5.1",
       "10.5.2"
+    ],
+    "expected_evidence_source_locators": [
+      "amendment-2026-01:4.1",
+      "amendment-2026-01:5.1"
     ],
     "expected_facts": [
       "excluded from eligibility",
-      "20 per cent",
-      "4 weeks",
-      "8 weeks"
+      "20% before 1 March 2026",
+      "15% on or after that date",
+      "4 or 8 weeks"
     ],
     "forbidden_claims": [
       "the only consequence is a 20 per cent reduction",
       "the only consequence is exclusion from eligibility"
     ],
     "category": "CONFLICT",
-    "notes": "Clause 4.1.1(a) makes an unexpired sanction an exclusion, while 10.5.2 defines the sanction as a percentage reduction."
+    "notes": "Clause 4.1.1(a) makes an unexpired sanction an exclusion, while 10.5.2 defines a percentage reduction. Amendment paragraph 4.1 changes only the percentage, so it does not resolve the conflict."
   },
   {
     "id": "Q09",

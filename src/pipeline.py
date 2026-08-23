@@ -12,7 +12,6 @@ from config.settings import Settings
 from src.artifact_integrity import resolve_local_directory, sha256_directory
 from src.decision_engine import DecisionEngine
 from src.embeddings import EmbeddingEngine
-from src.evidence import EvidenceAnalyzer
 from src.generator import AnswerBuilder
 from src.models import (
     CombinedCorpusReport,
@@ -35,6 +34,7 @@ from src.refusal import load_contacts, select_next_step
 from src.retriever import Retriever
 from src.temporal import TemporalPolicyResolver
 from src.vector_store import IndexIntegrityError, VectorStore
+from src.evidence import EvidenceAnalyzer
 
 LOGGER = logging.getLogger("grounded_answer")
 
@@ -117,16 +117,17 @@ class GroundedAnswerPipeline:
             reranker_model=settings.reranker_model,
             findings_path=settings.findings_path,
         )
-        self.evidence_analyzer = EvidenceAnalyzer(
-            store.chunks,
-            refusal_threshold=settings.refusal_threshold,
-            direct_coverage_threshold=settings.direct_coverage_threshold,
-            findings_path=settings.findings_path,
-        )
         self.decision_engine = DecisionEngine(
             refusal_threshold=settings.refusal_threshold,
             findings_path=settings.findings_path,
             enable_conflict_check=settings.enable_contradiction_check,
+            llm_provider=llm_provider,
+            evidence_analyzer=EvidenceAnalyzer(
+                store.chunks,
+                refusal_threshold=settings.refusal_threshold,
+                direct_coverage_threshold=settings.direct_coverage_threshold,
+                findings_path=settings.findings_path,
+            ),
         )
         self.answer_builder = AnswerBuilder(
             contacts_path=settings.contacts_path,
@@ -281,6 +282,38 @@ class GroundedAnswerPipeline:
                     f"{label} is stale for policy version {expected_date}; review it before serving answers"
                 )
 
+        indexed_amendments = {
+            (
+                chunk.document_id,
+                chunk.amendment_number,
+                chunk.effective_date,
+            )
+            for chunk in chunks
+            if chunk.source_kind == "amendment"
+        }
+        if indexed_amendments:
+            for label, payload in (("Policy findings", findings), ("Escalation contacts", contacts)):
+                reviewed = payload.get("reviewed_amendments")
+                if not isinstance(reviewed, list):
+                    raise IndexIntegrityError(
+                        f"{label} must record a source-verified review for every indexed amendment"
+                    )
+                reviewed_amendments = {
+                    (
+                        str(item.get("document_id")),
+                        str(item.get("amendment_number")),
+                        str(item.get("effective_date")),
+                    )
+                    for item in reviewed
+                    if isinstance(item, dict) and item.get("source_verified") is True
+                }
+                missing_amendments = sorted(indexed_amendments - reviewed_amendments)
+                if missing_amendments:
+                    raise IndexIntegrityError(
+                        f"{label} lacks a source-verified review for indexed amendment(s): "
+                        + ", ".join(item[0] for item in missing_amendments)
+                    )
+
         referenced: set[str] = set()
         for group in ("conflicts", "gaps"):
             for item in findings.get(group, []):
@@ -341,16 +374,8 @@ class GroundedAnswerPipeline:
                     }
                 )
 
-            with self.tracer.span("assess-evidence", "tool") as evidence_span:
-                evidence = self.evidence_analyzer.assess(normalized, retrieved)
-                support_counts: dict[str, int] = {}
-                for assessment in evidence:
-                    key = assessment.support_type.value
-                    support_counts[key] = support_counts.get(key, 0) + 1
-                evidence_span.end({"support_counts": support_counts})
-
             with self.tracer.span("decide-answer-state", "chain") as decision_span:
-                trace = self.decision_engine.decide(normalized, retrieved, evidence)
+                trace = self.decision_engine.decide(normalized, retrieved)
                 decision_span.end(
                     {
                         "decision": trace.decision.value,

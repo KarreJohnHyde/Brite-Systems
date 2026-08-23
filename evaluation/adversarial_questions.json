@@ -133,14 +133,16 @@
   },
   {
     "id": "A13",
-    "question": "I found both 10 days and 30 days in the manual. Which deadline governs reporting a household change?",
+    "question": "I found both 10 days and 30 days in the manual. Which deadline governs reporting a household change that occurred on 15 February 2026?",
     "expected_decision": "CONFLICT",
     "expected_clause_ids": ["4.3.2", "9.1.4"],
+    "expected_source_locators": ["amendment-2026-01:5.2"],
     "expected_evidence_clause_ids": ["4.3.2", "9.1.4"],
+    "expected_evidence_source_locators": ["amendment-2026-01:5.2"],
     "expected_facts": ["10 calendar days", "30 calendar days"],
     "forbidden_claims": ["the definitive deadline is 10 days", "the definitive deadline is 30 days"],
     "category": "CONFLICT_PARAPHRASE",
-    "notes": "An explicit user-observed discrepancy must surface both reviewed clauses rather than choose a deadline."
+    "notes": "For a pre-effective-date change, an explicit user-observed discrepancy must surface both reviewed clauses rather than choose a deadline."
   },
   {
     "id": "A14",

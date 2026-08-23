@@ -194,6 +194,7 @@ REPORTING_TOPIC_RE = re.compile(
     r"failure\s+to\s+report|reporting\s+(?:period|deadline))\b",
     re.IGNORECASE,
 )
+REPORT_ACTION_RE = re.compile(r"\breport(?:s|ed|ing)?\b", re.IGNORECASE)
 SANCTION_RATE_RE = re.compile(
     r"\b(sanction\b.{0,30}\b(?:rate|percent|percentage|amount|how much|reduction)|"
     r"(?:percent|percentage)\b.{0,20}\bsanction)\b",
@@ -480,7 +481,12 @@ class TemporalPolicyResolver:
             return "spanning_period"
         if INCREASE_PROTECTION_RE.search(question) or "10.5.3a" in lowered:
             return "increased_award_reporting_sanction"
-        if REPORTING_TOPIC_RE.search(question) or "4.3.2" in lowered or "9.1.4" in lowered:
+        if (
+            REPORTING_TOPIC_RE.search(question)
+            or (CHANGE_CUES.search(question) and REPORT_ACTION_RE.search(question))
+            or "4.3.2" in lowered
+            or "9.1.4" in lowered
+        ):
             return "reporting_deadline"
         if EARNINGS_TOPIC_RE.search(question) or "6.4.1" in lowered:
             return "earnings_disregard"
@@ -500,11 +506,20 @@ class TemporalPolicyResolver:
     ) -> PolicyAnswer | None:
         if not self.enabled:
             return None
+        context = extract_temporal_context(question)
         topic = self._topic(question)
+        # Staff often say "a claim period from … through …" instead of using
+        # the word "spanning".  Once two dates and a claim-period cue show that
+        # the period crosses the effective date, this is the specific ¶5.3
+        # situation even if no other amendment-sensitive topic is named.
+        if (
+            topic is None
+            and PERIOD_CUES.search(question)
+            and self._crosses_effective_date(context)
+        ):
+            topic = "spanning_period"
         if topic is None:
             return None
-
-        context = extract_temporal_context(question)
         if topic == "spanning_period" or self._crosses_effective_date(context):
             return self._spanning_answer(question, context, include_trace=include_trace)
         if topic == "earnings_disregard":
@@ -628,6 +643,7 @@ class TemporalPolicyResolver:
             decision=decision,
             decision_reason=reason,
             refusal_threshold=1.0,
+            resolution_path="temporal",
         )
         citations = CitationValidator(retrieved).build(
             [item.chunk.chunk_id for item in retrieved],
@@ -661,7 +677,8 @@ class TemporalPolicyResolver:
             question=question,
             decision=Decision.REFUSE,
             answer=(
-                "I don't know which version of the rule applies from the question alone. "
+                "I don't know based on the current policy sources which version of the rule "
+                "applies from the question alone. "
                 f"Please provide {needed}; the amendment makes that date legally controlling."
             ),
             reason=(

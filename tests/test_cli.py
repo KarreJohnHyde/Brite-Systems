@@ -31,6 +31,7 @@ def cli_environment(
     }
     for name, value in values.items():
         monkeypatch.setenv(name, str(value))
+    monkeypatch.setenv("AMENDMENT_PATH", "off")
     monkeypatch.setenv("EMBEDDING_BACKEND", "hashing")
     monkeypatch.setenv("EMBEDDING_DIMENSION", "128")
     monkeypatch.setenv("ENABLE_RERANKING", "false")
@@ -113,7 +114,11 @@ def test_cli_ingest_then_ask_offline(
         ]
     )
     ask_output = capsys.readouterr()
-    payload = json.loads(ask_output.out)
+    try:
+        payload = json.loads(ask_output.out)
+    except json.JSONDecodeError:
+        print(f'ask_code: {ask_code}\nout: {ask_output.out}\nerr: {ask_output.err}')
+        raise
 
     assert ask_code == 0
     assert payload["decision"] == "ANSWER"

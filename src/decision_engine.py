@@ -33,129 +33,182 @@ class DecisionEngine:
         refusal_threshold: float = 0.58,
         findings_path: str | Path | None = None,
         enable_conflict_check: bool = True,
+        llm_provider = None,
+        evidence_analyzer = None,
     ) -> None:
         self.refusal_threshold = refusal_threshold
         self.findings = load_findings(findings_path)
         self.conflict_detector = ContradictionDetector(findings_path)
         self.enable_conflict_check = enable_conflict_check
+        self.llm_provider = llm_provider
+        self.evidence_analyzer = evidence_analyzer
 
     def decide(
         self,
         question: str,
         retrieved: list[RetrievedClause],
-        evidence: list[EvidenceAssessment],
+        evidence: list | None = None,
     ) -> DecisionTrace:
         if is_underspecified_question(question):
             return self._trace(
-                question,
-                retrieved,
-                evidence,
-                [],
-                Decision.REFUSE,
-                "The question does not identify a specific policy topic or depends on missing conversational context. Ask a complete standalone question.",
+                question=question,
+                retrieved=retrieved,
+                evidence=[],
+                decision=Decision.REFUSE,
+                reason="The question does not identify a specific policy topic or depends on missing conversational context. Ask a complete standalone question.",
             )
 
         conflicts = (
-            self.conflict_detector.detect(question, retrieved, evidence)
+            self.conflict_detector.detect(question, retrieved)
             if self.enable_conflict_check
             else []
         )
         if conflicts:
             return self._trace(
-                question,
-                retrieved,
-                evidence,
-                conflicts,
-                Decision.CONFLICT,
-                "Relevant manual provisions are materially incompatible and no precedence rule resolves them.",
+                question=question,
+                retrieved=retrieved,
+                evidence=[],
+                decision=Decision.CONFLICT,
+                reason="Relevant manual provisions are materially incompatible and no precedence rule resolves them.",
+                conflicts=conflicts,
             )
 
         matching_gaps = [gap for gap in self.findings.get("gaps", []) if finding_matches(question, gap)]
         if matching_gaps:
             return self._trace(
-                question,
-                retrieved,
-                evidence,
-                [],
-                Decision.REFUSE,
-                str(matching_gaps[0].get("explanation", "The manual contains a material gap.")),
+                question=question,
+                retrieved=retrieved,
+                evidence=[],
+                decision=Decision.REFUSE,
+                reason=str(matching_gaps[0].get("explanation", "The manual contains a material gap.")),
             )
 
         if INDIVIDUAL_DETERMINATION_RE.search(question) or CASE_RECORD_RE.search(question):
             return self._trace(
-                question,
-                retrieved,
-                evidence,
-                [],
-                Decision.REFUSE,
-                "The manual supplies general rules, but the question requires case facts or a case record that were not provided.",
+                question=question,
+                retrieved=retrieved,
+                evidence=[],
+                decision=Decision.REFUSE,
+                reason="The manual supplies general rules, but the question requires case facts or a case record that were not provided.",
             )
 
-        direct = [item for item in evidence if item.support_type == SupportType.DIRECT]
-        if not direct:
-            related = any(
-                item.support_type in {SupportType.PARTIAL, SupportType.RELATED_ONLY}
-                for item in evidence
-            )
-            reason = (
-                "The retrieved clauses discuss related topics but do not directly settle the question."
-                if related
-                else "No clause in the manual directly supports an answer to this question."
-            )
-            return self._trace(question, retrieved, evidence, [], Decision.REFUSE, reason)
+        if evidence is None:
+            evidence = []
+            if self.evidence_analyzer:
+                evidence = self.evidence_analyzer.assess(question, retrieved)
 
-        aspects = self._required_aspects(question)
-        missing_aspects = self._missing_aspects(aspects, retrieved, direct)
-        if missing_aspects:
+        # Call the LLM Coverage Gate
+        if not self.llm_provider:
+            if not self.evidence_analyzer and not evidence:
+                return self._trace(
+                    question=question,
+                    retrieved=retrieved,
+                    evidence=[],
+                    decision=Decision.REFUSE,
+                    reason="No LLM provider available to evaluate coverage.",
+                )
+
+            # Legacy heuristic decision logic
+            direct = [item for item in evidence if item.support_type == SupportType.DIRECT]
+            if not direct:
+                related = any(
+                    item.support_type in {SupportType.PARTIAL, SupportType.RELATED_ONLY}
+                    for item in evidence
+                )
+                reason = (
+                    "The retrieved clauses discuss related topics but do not directly settle the question."
+                    if related
+                    else "No clause in the manual directly supports an answer to this question."
+                )
+                return self._trace(
+                    question=question,
+                    retrieved=retrieved,
+                    evidence=evidence,
+                    decision=Decision.REFUSE,
+                    reason=reason,
+                )
+
+            aspects = self._required_aspects(question)
+            missing_aspects = self._missing_aspects(aspects, retrieved, direct)
+            if missing_aspects:
+                return self._trace(
+                    question=question,
+                    retrieved=retrieved,
+                    evidence=evidence,
+                    decision=Decision.REFUSE,
+                    reason="Direct evidence was found for only part of the question; material aspects remain unsupported.",
+                    aspects=aspects,
+                    missing=missing_aspects,
+                )
+
+            best_score = max(item.score for item in direct)
+            if best_score < self.refusal_threshold:
+                return self._trace(
+                    question=question,
+                    retrieved=retrieved,
+                    evidence=evidence,
+                    decision=Decision.REFUSE,
+                    reason="The evidence did not meet the configured support threshold.",
+                )
+
             return self._trace(
-                question,
-                retrieved,
-                evidence,
-                [],
-                Decision.REFUSE,
-                "Direct evidence was found for only part of the question; material aspects remain unsupported.",
-                aspects,
-                missing_aspects,
+                question=question,
+                retrieved=retrieved,
+                evidence=evidence,
+                decision=Decision.ANSWER,
+                reason="Direct, complete, and internally consistent manual evidence was found.",
+                aspects=aspects,
+                missing=[],
             )
 
-        best_score = max(item.score for item in direct)
-        if best_score < self.refusal_threshold:
+        chunks = [r.chunk for r in retrieved]
+        try:
+            coverage = self.llm_provider.evaluate_coverage(question, chunks)
+        except Exception as exc:
             return self._trace(
-                question,
-                retrieved,
-                evidence,
-                [],
-                Decision.REFUSE,
-                "The evidence did not meet the configured support threshold.",
+                question=question,
+                retrieved=retrieved,
+                evidence=[],
+                decision=Decision.REFUSE,
+                reason=f"Coverage evaluation failed: {exc}",
+            )
+
+        if not coverage.covered:
+            return self._trace(
+                question=question,
+                retrieved=retrieved,
+                evidence=evidence,
+                decision=Decision.REFUSE,
+                reason=f"Direct evidence was found for only part of the question; material aspects remain unsupported. ({coverage.uncovered_aspect or 'Not covered'})",
+                missing=[coverage.uncovered_aspect] if coverage.uncovered_aspect else []
             )
 
         return self._trace(
-            question,
-            retrieved,
-            evidence,
-            [],
-            Decision.ANSWER,
-            "Direct, complete, and internally consistent manual evidence was found.",
-            aspects,
-            [],
+            question=question,
+            retrieved=retrieved,
+            evidence=evidence,
+            decision=Decision.ANSWER,
+            reason="Direct, complete, and internally consistent manual evidence was found.",
+            aspects=[],
+            missing=[],
         )
 
     def _trace(
         self,
         question: str,
         retrieved: list[RetrievedClause],
-        evidence: list[EvidenceAssessment],
-        conflicts,
+        evidence: list[EvidenceAssessment] | list,
         decision: Decision,
         reason: str,
         aspects: list[str] | None = None,
         missing: list[str] | None = None,
+        conflicts = None,
     ) -> DecisionTrace:
         return DecisionTrace(
             question=question,
             retrieved=retrieved,
             evidence=evidence,
-            conflicts=conflicts,
+            conflicts=conflicts or [],
             decision=decision,
             decision_reason=reason,
             refusal_threshold=self.refusal_threshold,

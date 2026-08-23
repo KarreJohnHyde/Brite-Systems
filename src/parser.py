@@ -623,7 +623,7 @@ def format_clause_for_context(chunk: PolicyChunk) -> str:
     return (
         "<POLICY_EXCERPT>\n"
         f"SOURCE_ID: {chunk.chunk_id}\n"
-        f"CLAUSE: {chunk.clause_id or 'internal'}\n"
+        f"LOCATOR: {chunk.source_locator_label or chunk.source_locator or chunk.clause_id or 'internal'}\n"
         f"SECTION: {chunk.section_id or 'unknown'} {chunk.section_title or ''}\n"
         f"PAGE: {page}\n"
         f"LINES: {chunk.line_start}-{chunk.line_end}\n"
@@ -633,15 +633,25 @@ def format_clause_for_context(chunk: PolicyChunk) -> str:
 
 
 def find_chunks(chunks: Iterable[PolicyChunk], source_id: str) -> list[PolicyChunk]:
-    """Resolve an opaque chunk ID, official clause ID, or section ID."""
+    """Resolve a trusted chunk, manual clause, section, amendment paragraph, or insertion."""
 
-    cleaned = source_id.strip().removeprefix("§")
+    raw = source_id.strip()
+    cleaned = raw.removeprefix("§")
+    normalized_locator = re.sub(
+        r"^amendment\s+no\.\s+([\d-]+)\s*¶\s*",
+        r"amendment-\1:",
+        raw,
+        flags=re.IGNORECASE,
+    )
     return [
         chunk
         for chunk in chunks
         if chunk.chunk_id == cleaned
         or chunk.clause_id == cleaned
         or chunk.section_id == cleaned
+        or chunk.source_locator == raw
+        or chunk.source_locator == normalized_locator
+        or cleaned in chunk.inserts_clause_ids
     ]
 
 

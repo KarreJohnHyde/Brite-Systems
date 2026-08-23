@@ -84,7 +84,10 @@ def run_calibration(
     known_clause_ids = {
         chunk.clause_id for chunk in base_pipeline.store.chunks if chunk.clause_id is not None
     }
-    validate_question_clause_ids(questions, known_clause_ids)
+    known_source_locators = {
+        chunk.source_locator for chunk in base_pipeline.store.chunks if chunk.source_locator is not None
+    }
+    validate_question_clause_ids(questions, known_clause_ids, known_source_locators)
 
     candidates: list[dict[str, Any]] = []
     for refusal_threshold in refusal_values:
