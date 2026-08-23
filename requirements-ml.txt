@@ -1,0 +1,4 @@
+# Optional local semantic embeddings and cross-encoder reranking.
+-r requirements.txt
+sentence-transformers==6.0.0
+torch==2.13.0

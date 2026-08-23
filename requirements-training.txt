@@ -1,0 +1,4 @@
+# Optional local training stack for the retriever and cross-encoder reranker.
+-r requirements-ml.txt
+datasets==5.0.1
+accelerate==1.14.0

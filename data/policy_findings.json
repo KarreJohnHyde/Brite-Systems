@@ -1,0 +1,226 @@
+{
+  "document_id": "calder-hsp-policy-manual",
+  "document_name": "Calder County Household Support Program Policy Manual",
+  "document_version": "Consolidated text as at 31 December 2025",
+  "consolidated_as_of": "2025-12-31",
+  "source_path": "data/policy-manual.md",
+  "source_verified": true,
+  "conflicts": [
+    {
+      "id": "CONFLICT-001",
+      "status": "CONFIRMED",
+      "clause_ids": [
+        "4.3.2",
+        "9.1.4"
+      ],
+      "topic_terms": [
+        "report a change",
+        "change of circumstances",
+        "reporting deadline",
+        "failure to report",
+        "10 calendar days",
+        "30 calendar days"
+      ],
+      "trigger_patterns": [
+        "report.*change.*(?:day|deadline|time)",
+        "change.*report.*(?:day|deadline|time)",
+        "how many.*report.*change",
+        "failure to report.*(?:day|deadline|time)"
+      ],
+      "explanation": "Clause 4.3.2 requires a recipient to report a change within 10 calendar days, while clause 9.1.4 describes 30 calendar days as the period required under section 4.3. The manual supplies no precedence rule that resolves the two deadlines.",
+      "source_verified": true
+    },
+    {
+      "id": "CONFLICT-002",
+      "status": "CONFIRMED",
+      "clause_ids": [
+        "4.1.1",
+        "10.5.2"
+      ],
+      "context_clause_ids": [
+        "2.1.2",
+        "2.2.1",
+        "10.1.1",
+        "10.5.1"
+      ],
+      "topic_terms": [
+        "sanction",
+        "unexpired sanction",
+        "excluded from eligibility",
+        "award reduction",
+        "20 per cent",
+        "missed interview",
+        "failure to attend"
+      ],
+      "trigger_patterns": [
+        "sanction.*(?:reduce|reduction|ineligible|eligibility|excluded|effect|consequence|miss.*interview|fail.*attend)",
+        "(?:reduce|reduction|ineligible|excluded).*sanction",
+        "miss.*interview.*sanction"
+      ],
+      "explanation": "Clause 4.1.1(a) says that a person subject to an unexpired sanction under section 10.5 is excluded from eligibility, while clause 10.5.2 defines a sanction as a 20 per cent reduction of the monthly award for 4 or 8 weeks. The manual does not explain whether exclusion or reduction controls or whether the effects are cumulative.",
+      "source_verified": true
+    }
+  ],
+  "gaps": [
+    {
+      "id": "GAP-001",
+      "status": "CONFIRMED",
+      "clause_ids": [
+        "1.4.6",
+        "7.1.3",
+        "5.4.1",
+        "5.4.2"
+      ],
+      "topic_terms": [
+        "full-time student",
+        "student needs figure",
+        "student award",
+        "care allowance",
+        "section 5.4"
+      ],
+      "trigger_patterns": [
+        "full[- ]time student.*(?:needs|award|calculat)",
+        "(?:needs|award|calculat).*full[- ]time student"
+      ],
+      "explanation": "Clause 7.1.3 says that full-time students are an exception to the ordinary needs-figure calculation and directs the reader to section 5.4, but section 5.4 concerns care allowances. No clause supplies the missing student calculation.",
+      "source_verified": true
+    },
+    {
+      "id": "GAP-002",
+      "status": "CONFIRMED",
+      "clause_ids": [
+        "3.2.3",
+        "5.2.3"
+      ],
+      "topic_terms": [
+        "full-time education",
+        "educational absence",
+        "student absence",
+        "studying outside the county",
+        "temporary absence"
+      ],
+      "trigger_patterns": [
+        "full[- ]time (?:education|student).*(?:absen|outside)",
+        "(?:absen|outside).*full[- ]time (?:education|student)",
+        "study.*outside"
+      ],
+      "explanation": "Clauses 3.2.3 and 5.2.3 both say that absence for full-time education is addressed separately, but no separate residence or household-membership rule for that absence appears in the manual.",
+      "source_verified": true
+    },
+    {
+      "id": "GAP-003",
+      "status": "CONFIRMED",
+      "clause_ids": [
+        "2.4.1",
+        "2.4.2",
+        "2.4.3",
+        "6.2.1",
+        "6.3.1"
+      ],
+      "topic_terms": [
+        "countable resources",
+        "resource valuation",
+        "unlisted asset",
+        "cryptocurrency",
+        "digital asset",
+        "second car",
+        "second motor vehicle"
+      ],
+      "trigger_patterns": [
+        "cryptocurrency|digital asset|virtual currency",
+        "second (?:motor )?vehicle",
+        "unlisted asset",
+        "(?:value|amount).*vehicle"
+      ],
+      "explanation": "Section 2.4 supplies a $4,000 limit, a list of excluded resources, and a rule for jointly held resources, but it does not define or value unlisted asset types. Clause 6.3.1 classifies qualifying lump sums as resources but does not fill that classification and valuation gap.",
+      "source_verified": true
+    },
+    {
+      "id": "GAP-004",
+      "status": "CONFIRMED",
+      "clause_ids": [
+        "1.4.3",
+        "7.1.3",
+        "7.2.1"
+      ],
+      "topic_terms": [
+        "multiple adults",
+        "three adults",
+        "unrelated adults",
+        "couple",
+        "household composition",
+        "needs figure"
+      ],
+      "trigger_patterns": [
+        "(?:three|multiple|unrelated).*adult",
+        "adult.*(?:needs figure|household composition)",
+        "what .*couple"
+      ],
+      "explanation": "The household definition can include multiple adults who share living arrangements, but the needs table provides adult figures only for a single adult or a couple and does not define couple. It gives no calculation for other multi-adult compositions.",
+      "source_verified": true
+    },
+    {
+      "id": "GAP-005",
+      "status": "CONFIRMED",
+      "clause_ids": [
+        "3.3.1",
+        "3.3.2",
+        "8.1.2"
+      ],
+      "topic_terms": [
+        "no fixed address",
+        "homeless applicant",
+        "application address",
+        "district office correspondence"
+      ],
+      "trigger_patterns": [
+        "no fixed address.*(?:application|form|enter|supply).*address",
+        "(?:application|form).*address.*no fixed"
+      ],
+      "explanation": "Section 3.3 permits an applicant with no fixed address and allows correspondence to be held at a district office, while clause 8.1.2 requires a valid application to contain the applicant's address. The manual does not say what such an applicant should enter as their address.",
+      "source_verified": true
+    },
+    {
+      "id": "GAP-006",
+      "status": "CONFIRMED",
+      "clause_ids": [
+        "7.2.1",
+        "7.3.3"
+      ],
+      "topic_terms": [
+        "housing assistance",
+        "housing costs",
+        "needs figure components",
+        "award adjustment"
+      ],
+      "trigger_patterns": [
+        "housing assistance.*(?:cost|component|calculat|adjust)",
+        "(?:cost|component).*needs figure"
+      ],
+      "explanation": "Clause 7.3.3 requires housing assistance to reduce the needs figure only to the extent that it covers costs included in that figure, but clause 7.2.1 states only aggregate amounts and never identifies the included cost components.",
+      "source_verified": true
+    },
+    {
+      "id": "GAP-007",
+      "status": "CONFIRMED",
+      "clause_ids": [
+        "1.1.1",
+        "1.1.2"
+      ],
+      "topic_terms": [
+        "support services",
+        "referral assistance",
+        "where to get support",
+        "how to access services",
+        "who to contact for help"
+      ],
+      "trigger_patterns": [
+        "(?:where|how).*(?:get|find|access|obtain).*(?:support|referral|assistance|services?)",
+        "(?:support|referral|assistance|services?).*(?:where|how).*(?:get|find|access|obtain)",
+        "who.*(?:ask|contact|call).*(?:support|referral|assistance|services?)"
+      ],
+      "explanation": "Clause 1.1.1 promises access to associated support services and clause 1.1.2 identifies the administering offices, but the manual does not say where, how, or from whom a person can obtain resource or referral assistance.",
+      "source_verified": true
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+# Pinned core dependency set for CPython 3.11+.
+# Install with: python -m pip install -r requirements.txt
+
+# Core deterministic pipeline and validated configuration
+numpy==2.4.6
+pydantic==2.13.4
+python-dotenv==1.2.3
+faiss-cpu==1.15.0
+
+# Tests
+pytest==9.1.1
