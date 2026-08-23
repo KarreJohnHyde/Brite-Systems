@@ -14,6 +14,7 @@ from src.artifact_integrity import resolve_local_directory, sha256_directory
 from src.decision_engine import DecisionEngine
 from src.embeddings import EmbeddingEngine
 from src.generator import AnswerBuilder
+from src.llm.factory import build_llm_provider
 from src.models import (
     CombinedCorpusReport,
     Decision,
@@ -57,6 +58,7 @@ def ingest_corpus(settings: Settings) -> tuple[IngestionReport | CombinedCorpusR
         settings.embedding_model,
         backend=settings.embedding_backend,
         dimension=settings.embedding_dimension,
+        api_key=settings.embedding_api_key,
     )
     embeddings = engine.encode_clauses(chunks)
     local_embedding = (
@@ -158,7 +160,7 @@ class GroundedAnswerPipeline:
                 f"Configured embedding backend {settings.embedding_backend!r} does not match indexed "
                 f"backend {backend!r}. Re-run ingest with the desired backend."
             )
-        if backend == "sentence-transformers" and model != settings.embedding_model:
+        if backend != "hashing" and model != settings.embedding_model:
             raise IndexIntegrityError(
                 f"Configured embedding model {settings.embedding_model!r} does not match index model {model!r}."
             )
@@ -168,22 +170,35 @@ class GroundedAnswerPipeline:
             settings.embedding_model,
             backend=backend,
             dimension=dimension,
+            api_key=settings.embedding_api_key,
         )
         store = VectorStore(engine.dimension)
         store.load(settings.index_dir)
         cls._validate_corpus_identity(settings.source_paths, store.manifest)
         cls._validate_chunk_metadata(settings.source_paths, store.chunks)
 
-        provider = None
-        if settings.llm_provider == "gemini":
-            from src.llm import GeminiProvider
-
-            provider = GeminiProvider(
-                api_key=settings.gemini_api_key,
-                model=settings.gemini_model,
-                thinking_level=settings.gemini_thinking_level,
-            )
+        provider = build_llm_provider(settings)
         return cls(settings, engine, store, llm_provider=provider)
+
+    @classmethod
+    def from_base(
+        cls,
+        base: GroundedAnswerPipeline,
+        settings: Settings,
+    ) -> GroundedAnswerPipeline:
+        """Reuse a loaded local index while attaching session-specific providers."""
+
+        if settings.embedding_backend != base.settings.embedding_backend:
+            raise ValueError("Base pipeline embedding backend does not match settings")
+        if settings.embedding_model != base.settings.embedding_model:
+            raise ValueError("Base pipeline embedding model does not match settings")
+        provider = build_llm_provider(settings)
+        return cls(
+            settings,
+            base.embedding_engine,
+            base.store,
+            llm_provider=provider,
+        )
 
     @staticmethod
     def _validate_embedding_artifact(settings: Settings, manifest: dict) -> None:
@@ -345,7 +360,7 @@ class GroundedAnswerPipeline:
         normalized = question.strip()
         if not normalized:
             raise ValueError("Question must not be empty")
-        model = self.settings.gemini_model if self.settings.llm_provider == "gemini" else "deterministic"
+        model = self.settings.answer_model
         with self.tracer.query(
             normalized,
             include_debug_trace=include_trace,
@@ -415,7 +430,9 @@ class GroundedAnswerPipeline:
                 )
 
             generation_error: Exception | None = None
-            run_type = "llm" if self.settings.llm_provider == "gemini" else "chain"
+            run_type = (
+                "llm" if self.settings.llm_provider != "deterministic" else "chain"
+            )
             with self.tracer.span(
                 "build-validated-answer",
                 run_type,

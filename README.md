@@ -86,7 +86,7 @@ evidence + contradiction / gap checks
           └─ no  ─► REFUSE + who to ask
                          │
                          ▼
-deterministic answer builder or optional Gemini phrasing
+deterministic answer builder or optional validated model phrasing
                          │
                          ▼
 claim, policy-version, and citation validation
@@ -97,7 +97,8 @@ claim, policy-version, and citation validation
 
 The default path uses stable local hashing embeddings, lexical retrieval,
 deterministic answer construction, and no credentials. Sentence Transformers,
-CrossEncoder reranking, and Gemini phrasing are opt-in runtime modes.
+OpenAI or Gemini hosted embeddings, CrossEncoder reranking, and Gemini, OpenAI,
+Claude, or Llama/Groq phrasing are opt-in runtime modes.
 
 ## Prerequisites
 
@@ -105,7 +106,7 @@ CrossEncoder reranking, and Gemini phrasing are opt-in runtime modes.
 - Git
 - Internet access for the initial dependency installation
 - Additional network access only when downloading optional Hugging Face models
-  or calling Gemini
+  or calling a selected hosted embedding, phrasing, or tracing provider
 
 Run all commands from the repository root. The generated index records its
 embedding backend and source-bundle digest; asking with a different backend or
@@ -338,7 +339,7 @@ Latest local verification for the checked-in source bundle:
 | Adversarial suite | 15 / 15 strict cases passed |
 | Date-sensitive amendment suite | 17 / 17 strict cases passed, including structured dates, amendment locators, reporting-duty scope, and the historical overpayment conflict |
 | Offline calibration | Recommended `REFUSAL_THRESHOLD=0.58`, `DIRECT_COVERAGE_THRESHOLD=0.34`; zero false answers and zero missed conflicts on the development set |
-| Automated regression suite | 149 tests passed |
+| Automated regression suite | 169 tests passed |
 
 These are local development measurements, not a claim of legal correctness or
 generalization beyond the supplied sources and the recorded cases.
@@ -441,11 +442,12 @@ remains opt-in until it is re-evaluated against the amendment-aware cases. See
 the [`model-training report`](evaluation/results/model-training/county-hsp-local-v1-s42/report.md)
 for its historical details.
 
-## Optional Gemini phrasing
+## Optional hosted providers
 
 The deterministic decision, evidence, and citation checks remain authoritative.
-Gemini is used only to phrase an already-supported answer and cannot convert a
-trusted `REFUSE` or `CONFLICT` decision into `ANSWER`.
+Gemini, OpenAI, Claude, and Llama via Groq are used only to assess coverage and
+phrase an already-supported answer. They cannot convert a trusted `REFUSE` or
+`CONFLICT` decision into `ANSWER`.
 
 Install the optional provider dependency:
 
@@ -453,13 +455,23 @@ Install the optional provider dependency:
 python -m pip install -r requirements-llm.txt
 ```
 
-Then set these values in the untracked `.env` file:
+The Streamlit sidebar accepts credentials in password fields for the current
+browser session. Pasted values are kept in Streamlit session state and are not
+written to `.env`, logs, answers, or chat history. For CLI or managed deployment
+use, set only the required values in the untracked `.env` file or deployment
+secrets:
 
 ```dotenv
 LLM_PROVIDER=gemini
 GEMINI_MODEL=gemini-3.6-flash
 GEMINI_THINKING_LEVEL=minimal
 GEMINI_API_KEY=
+OPENAI_MODEL=gpt-5-mini
+OPENAI_API_KEY=
+ANTHROPIC_MODEL=claude-sonnet-4-6
+ANTHROPIC_API_KEY=
+LLAMA_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
+GROQ_API_KEY=
 ```
 
 Set `GEMINI_API_KEY` to your own credential in the untracked file, then run:
@@ -468,12 +480,18 @@ Set `GEMINI_API_KEY` to your own credential in the untracked file, then run:
 python main.py ask "What is the household resource limit?" --provider gemini
 ```
 
-Gemini 3 requests use minimal thinking for this short structured phrasing task.
-Provider errors, malformed output, unsupported claims, decision changes, and
-invalid source IDs are discarded. The assistant then shows the already
-validated exact policy text and trusted citation; rejected model text is never
-rendered. If that fallback also fails validation, the pipeline returns
-`REFUSE`. A credential-redacted live supported/refusal check is recorded in the
+For hosted retrieval, select OpenAI or Gemini in **Embedding backend** and paste
+that provider's key. The app creates an index isolated by provider, model, and
+dimension. Building that index sends the policy source text to the selected
+provider; each question is also sent for query embedding. Hashing and MiniLM
+keep retrieval local.
+
+Gemini requests use minimal thinking for this short structured phrasing task.
+Every hosted provider must return the required structured schema. Provider
+errors, malformed output, unsupported claims, decision changes, and invalid
+source IDs are discarded. The assistant shows validated deterministic wording
+when an optional provider is missing or fails; rejected model text is never
+rendered. A credential-redacted live supported/refusal check is recorded in the
 [`Gemini provider smoke report`](evaluation/results/model-training/county-hsp-local-v1-s42/provider-smoke.md).
 
 ## Optional LangSmith tracing
@@ -494,10 +512,13 @@ LANGSMITH_PROJECT=grounded-answer
 ```
 
 `LANGCHAIN_API_KEY` remains accepted as a legacy fallback, but new setups
-should use the official `LANGSMITH_API_KEY` name. Traces contain timing and
-state diagnostics for retrieval, evidence assessment, decision, and validated
-answer construction. Raw questions, generated answers, reasons, next steps,
-policy excerpts, and full debug traces are excluded by a strict allowlist.
+should use the official `LANGSMITH_API_KEY` name. A LangSmith/LangChain key is
+an observability credential, not an embedding credential; choose OpenAI or
+Gemini and provide that provider's key for hosted embeddings. Traces contain
+timing and state diagnostics for retrieval, evidence assessment, decision, and
+validated answer construction. Raw questions, generated answers, reasons, next
+steps, policy excerpts, and full debug traces are excluded by a strict
+allowlist.
 
 ## Streamlit interface
 
@@ -524,12 +545,14 @@ This repository can be deployed directly with these settings:
 | Main file path | `app.py` |
 | Python | `3.11` or newer |
 
-The sidebar exposes every runtime that the deployment can execute. Hashing and
-deterministic phrasing are always available. MiniLM semantic retrieval appears
-when `sentence-transformers` is installed and creates its own cached index on
-first use. Gemini appears only when both `google-genai` and a server-side
-`GEMINI_API_KEY` are configured. A failed optional runtime returns the app to
-the verified hashing/deterministic profile instead of leaving an error screen.
+The sidebar exposes every installed runtime. Hashing and deterministic phrasing
+are always available. MiniLM creates its own cached local index on first use.
+OpenAI and Gemini hosted embeddings, plus Gemini, OpenAI, Claude, and Llama/Groq
+answer phrasing, can use either deployment secrets or the visible session-only
+password fields. Missing or invalid credentials return the request to verified
+hashing/deterministic behavior instead of leaving an error screen. The sidebar
+badge and each answer's review report the mode that actually produced the
+result, including any fallback.
 
 Each response includes an **Answer review** with its active embedding backend,
 answer provider, decision, evidence level, and validated citation count. The
@@ -543,15 +566,17 @@ interface for evaluation and reproducibility.
 
 - Default deterministic mode keeps questions and excerpts local and makes no
   model API call.
-- Gemini mode sends the question and only the selected policy excerpts with
-  opaque source IDs to the configured Gemini API. Do not use it for sensitive
-  case data without an approved privacy review.
+- Hosted phrasing sends the question and only selected policy excerpts with
+  opaque source IDs to the configured provider. Hosted embeddings send policy
+  text during index construction and questions during retrieval. Do not use
+  either mode for sensitive case data without an approved privacy review.
 - Policy excerpts are treated as untrusted data, not executable instructions.
 - The model may select only source IDs already supplied by the program. Trusted
   clause metadata is mapped back in code and invented IDs are rejected.
 - Claim validation rejects obvious invented clause IDs and unsupported numeric
   values before rendering.
-- `.env` and Streamlit secrets are ignored. Never commit API keys.
+- `.env` and Streamlit secrets are ignored. Sidebar keys remain in the current
+  Streamlit session only. Never commit API keys.
 - Debug traces contain the question, retrieved excerpts, scores, and decision
   rationale. Treat exported traces as potentially sensitive.
 - LangSmith tracing is content-redacted by design and records only allowlisted
@@ -620,8 +645,9 @@ it does not choose which provision should prevail.
   contradiction has been discovered.
 - The default deterministic answer is intentionally source-forward rather than
   highly conversational.
-- Gemini availability, latency, pricing, and output can change independently of
-  this repository. The safe local path does not depend on Gemini.
+- Hosted-provider availability, latency, pricing, model names, and output can
+  change independently of this repository. The safe local path does not depend
+  on any hosted provider.
 - The system has no case database and cannot explain an individual case outcome
   or make an eligibility determination from missing facts.
 - The date resolver currently implements only the source-verified amendment
@@ -646,7 +672,7 @@ grounded-answer/
 ├── src/
 │   ├── parser.py               exact-source manual and amendment ingestion
 │   ├── temporal.py             date-aware amendment applicability resolver
-│   ├── embeddings.py           hashing and Sentence Transformer backends
+│   ├── embeddings.py           local, OpenAI, and Gemini embedding backends
 │   ├── lexical.py              lexical retrieval
 │   ├── vector_store.py         persisted FAISS index and integrity checks
 │   ├── retriever.py            hybrid retrieval, neighbors, optional reranking
@@ -659,14 +685,14 @@ grounded-answer/
 │   ├── refusal.py              refusal and escalation text
 │   ├── observability.py        content-redacted LangSmith tracing
 │   ├── pipeline.py             composition root and fail-safe orchestration
-│   └── llm/                    optional provider interface and Gemini adapter
+│   └── llm/                    validated Gemini/OpenAI/Claude/Llama adapters
 ├── evaluation/                 core/adversarial labels, runner, calibration, results
 ├── training/                   guarded data building, metrics, and local trainers
 ├── tests/                      automated tests
 ├── requirements.txt            pinned Python dependencies
 ├── requirements-ml.txt         optional local models and reranker
 ├── requirements-training.txt   optional local CPU training stack
-├── requirements-llm.txt        optional Gemini provider
+├── requirements-llm.txt        optional hosted answer providers
 ├── requirements-tracing.txt    optional LangSmith observability
 ├── requirements-ui.txt         optional Streamlit interface
 ├── .env.example                safe runtime defaults

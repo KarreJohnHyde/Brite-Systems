@@ -11,6 +11,27 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
+EmbeddingBackend = Literal[
+    "hashing",
+    "sentence-transformers",
+    "openai",
+    "gemini",
+]
+AnswerProvider = Literal[
+    "deterministic",
+    "gemini",
+    "openai",
+    "anthropic",
+    "llama",
+]
+
+DEFAULT_EMBEDDING_MODELS: dict[str, str] = {
+    "hashing": "stable-hashing-768",
+    "sentence-transformers": "sentence-transformers/all-MiniLM-L6-v2",
+    "openai": "text-embedding-3-small",
+    "gemini": "gemini-embedding-2",
+}
+
 
 def _env_bool(name: str, default: bool) -> bool:
     value = os.getenv(name)
@@ -34,7 +55,7 @@ class Settings(BaseModel):
     findings_path: Path = PROJECT_ROOT / "data" / "policy_findings.json"
     contacts_path: Path = PROJECT_ROOT / "data" / "contacts.json"
 
-    embedding_backend: Literal["hashing", "sentence-transformers"] = "hashing"
+    embedding_backend: EmbeddingBackend = "hashing"
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_dimension: int = Field(default=768, ge=64, le=4096)
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
@@ -51,12 +72,18 @@ class Settings(BaseModel):
     refusal_threshold: float = Field(default=0.58, ge=0.0, le=1.0)
     direct_coverage_threshold: float = Field(default=0.34, ge=0.0, le=1.0)
 
-    llm_provider: Literal["deterministic", "gemini"] = "deterministic"
+    llm_provider: AnswerProvider = "deterministic"
     gemini_model: str = "gemini-3.6-flash"
     gemini_thinking_level: Literal["minimal", "low", "medium", "high"] = "minimal"
-    gemini_api_key: str | None = None
+    gemini_api_key: str | None = Field(default=None, repr=False)
+    openai_model: str = "gpt-5-mini"
+    openai_api_key: str | None = Field(default=None, repr=False)
+    anthropic_model: str = "claude-sonnet-4-6"
+    anthropic_api_key: str | None = Field(default=None, repr=False)
+    llama_model: str = "meta-llama/llama-4-scout-17b-16e-instruct"
+    llama_api_key: str | None = Field(default=None, repr=False)
     langsmith_tracing: bool = False
-    langsmith_api_key: str | None = None
+    langsmith_api_key: str | None = Field(default=None, repr=False)
     langsmith_project: str = "grounded-answer"
     langsmith_endpoint: str = "https://api.smith.langchain.com"
     langsmith_workspace_id: str | None = None
@@ -87,6 +114,29 @@ class Settings(BaseModel):
             return (self.corpus_path,)
         return (self.corpus_path, self.amendment_path)
 
+    @property
+    def embedding_api_key(self) -> str | None:
+        """Return the credential used by the selected remote embedding backend."""
+
+        if self.embedding_backend == "openai":
+            return self.openai_api_key
+        if self.embedding_backend == "gemini":
+            return self.gemini_api_key
+        return None
+
+    @property
+    def answer_model(self) -> str:
+        """Return the model descriptor for tracing and answer review."""
+
+        models = {
+            "deterministic": "deterministic",
+            "gemini": self.gemini_model,
+            "openai": self.openai_model,
+            "anthropic": self.anthropic_model,
+            "llama": self.llama_model,
+        }
+        return models[self.llm_provider]
+
     @classmethod
     def from_env(
         cls,
@@ -113,6 +163,10 @@ class Settings(BaseModel):
             return Path(raw).expanduser().resolve() if raw else root / relative
 
         _backend = embedding_backend or os.getenv("EMBEDDING_BACKEND", "hashing")
+        default_embedding_model = DEFAULT_EMBEDDING_MODELS.get(
+            _backend,
+            DEFAULT_EMBEDDING_MODELS["hashing"],
+        )
         if amendment_path is not None:
             selected_amendment: Path | None = Path(amendment_path).expanduser().resolve()
         elif corpus_path is not None:
@@ -139,7 +193,7 @@ class Settings(BaseModel):
             "findings_path": path_env("POLICY_FINDINGS_PATH", "data/policy_findings.json"),
             "contacts_path": path_env("CONTACTS_PATH", "data/contacts.json"),
             "embedding_backend": _backend,
-            "embedding_model": os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"),
+            "embedding_model": os.getenv("EMBEDDING_MODEL", default_embedding_model),
             "embedding_dimension": int(os.getenv("EMBEDDING_DIMENSION", "768")),
             "reranker_model": os.getenv("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
             "enable_hybrid_search": _env_bool("ENABLE_HYBRID_SEARCH", True),
@@ -158,6 +212,19 @@ class Settings(BaseModel):
             "gemini_model": os.getenv("GEMINI_MODEL", "gemini-3.6-flash"),
             "gemini_thinking_level": os.getenv("GEMINI_THINKING_LEVEL", "minimal"),
             "gemini_api_key": os.getenv("GEMINI_API_KEY") or None,
+            "openai_model": os.getenv("OPENAI_MODEL", "gpt-5-mini"),
+            "openai_api_key": os.getenv("OPENAI_API_KEY") or None,
+            "anthropic_model": os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"),
+            "anthropic_api_key": os.getenv("ANTHROPIC_API_KEY") or None,
+            "llama_model": os.getenv(
+                "LLAMA_MODEL",
+                "meta-llama/llama-4-scout-17b-16e-instruct",
+            ),
+            "llama_api_key": (
+                os.getenv("LLAMA_API_KEY")
+                or os.getenv("GROQ_API_KEY")
+                or None
+            ),
             "langsmith_tracing": _env_bool("LANGSMITH_TRACING", False),
             "langsmith_api_key": (
                 os.getenv("LANGSMITH_API_KEY")

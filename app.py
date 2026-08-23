@@ -1,8 +1,8 @@
 """Streamlit interface for The Grounded Answer.
 
 The UI uses the same source-first pipeline and validated PolicyAnswer contract as
-the CLI. Optional runtimes are exposed only when their local package and required
-server-side credentials are available.
+the CLI. Optional runtimes use deployment credentials or keys supplied only for
+the current Streamlit session.
 """
 
 from __future__ import annotations
@@ -18,9 +18,14 @@ import streamlit as st
 from config.settings import Settings
 from src.pipeline import GroundedAnswerPipeline, ingest_corpus
 from src.web_runtime import (
+    ANSWER_KEY_FIELDS,
+    ANSWER_MODEL_FIELDS,
+    LOCAL_EMBEDDING_BACKENDS,
+    answer_provider_key,
     available_answer_providers,
     available_embedding_backends,
     build_runtime_settings,
+    langsmith_available,
 )
 
 
@@ -30,10 +35,33 @@ DEFAULT_ANSWER_PROVIDER = "deterministic"
 EMBEDDING_LABELS = {
     "hashing": "Hashing · fast and offline",
     "sentence-transformers": "MiniLM · semantic search",
+    "openai": "OpenAI · hosted embeddings",
+    "gemini": "Gemini · hosted embeddings",
 }
 PROVIDER_LABELS = {
     "deterministic": "Deterministic · verified",
     "gemini": "Gemini · model phrasing",
+    "openai": "OpenAI · model phrasing",
+    "anthropic": "Claude · model phrasing",
+    "llama": "Llama via Groq · model phrasing",
+}
+CREDENTIAL_WIDGET_KEYS = {
+    "gemini": "session_gemini_api_key",
+    "openai": "session_openai_api_key",
+    "anthropic": "session_anthropic_api_key",
+    "llama": "session_llama_api_key",
+    "langsmith": "session_langsmith_api_key",
+}
+CREDENTIAL_LABELS = {
+    "gemini": "Gemini API key",
+    "openai": "OpenAI API key",
+    "anthropic": "Anthropic API key",
+    "llama": "Groq API key for Llama",
+    "langsmith": "LangSmith / LangChain API key",
+}
+REMOTE_EMBEDDING_KEY_PROVIDER = {
+    "openai": "openai",
+    "gemini": "gemini",
 }
 
 st.set_page_config(
@@ -93,7 +121,10 @@ def _render_answer(
             review_lines.extend(
                 [
                     f"**Embedding backend:** {EMBEDDING_LABELS.get(backend, backend)}",
+                    f"**Embedding model:** {runtime.get('embedding_model', 'not recorded')}",
                     f"**Answer phrasing:** {PROVIDER_LABELS.get(provider, provider)}",
+                    f"**Answer model:** {runtime.get('answer_model', 'not recorded')}",
+                    f"**LangSmith tracing:** {'On · content redacted' if runtime.get('langsmith_tracing') else 'Off'}",
                 ]
             )
         st.markdown("  \n".join(review_lines))
@@ -147,14 +178,21 @@ def _artifact_revision(settings: Settings) -> str:
     return digest.hexdigest()
 
 
-@st.cache_resource(show_spinner="Loading the policy index…", max_entries=8)
-def _load_pipeline(
+@st.cache_resource(show_spinner="Loading the policy index…", max_entries=4)
+def _load_local_pipeline(
     embedding_backend: str,
-    provider: str,
+    embedding_model: str,
+    embedding_dimension: int,
     artifact_revision: str,
 ) -> GroundedAnswerPipeline:
     del artifact_revision  # The value is intentionally part of the cache key.
-    settings = build_runtime_settings(embedding_backend, provider)
+    settings = build_runtime_settings(
+        embedding_backend,
+        DEFAULT_ANSWER_PROVIDER,
+        embedding_model=embedding_model,
+        embedding_dimension=embedding_dimension,
+        langsmith_tracing=False,
+    )
     manifest_path = settings.index_dir / "manifest.json"
     if not manifest_path.exists():
         LOGGER.info("Policy index is missing; creating it from the trusted source bundle")
@@ -163,9 +201,104 @@ def _load_pipeline(
 
 
 def _runtime_selection_changed() -> None:
-    """Release the prior model/index when a user changes runtime mode."""
+    """Release session-specific clients when runtime controls change."""
 
-    _load_pipeline.clear()
+    st.session_state.pop("_session_runtime_pipeline", None)
+
+
+def _secret_fingerprint(value: str | None) -> str:
+    if not value:
+        return "missing"
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
+
+
+def _session_credential(
+    provider: str,
+    deployment_settings: Settings,
+) -> tuple[str | None, str | None]:
+    """Resolve a pasted key first, without exposing a deployment secret in the UI."""
+
+    widget_key = CREDENTIAL_WIDGET_KEYS[provider]
+    pasted = str(st.session_state.get(widget_key, "")).strip()
+    if pasted:
+        return pasted, "session"
+    if provider == "langsmith":
+        deployed = deployment_settings.langsmith_api_key
+    else:
+        deployed = answer_provider_key(deployment_settings, provider)
+    if deployed:
+        return deployed, "deployment"
+    return None, None
+
+
+def _runtime_signature(settings: Settings) -> str:
+    values = [
+        settings.embedding_backend,
+        settings.embedding_model,
+        str(settings.embedding_dimension),
+        settings.llm_provider,
+        settings.answer_model,
+        str(settings.langsmith_tracing),
+        settings.langsmith_project,
+        _artifact_revision(settings),
+        _secret_fingerprint(settings.gemini_api_key),
+        _secret_fingerprint(settings.openai_api_key),
+        _secret_fingerprint(settings.anthropic_api_key),
+        _secret_fingerprint(settings.llama_api_key),
+        _secret_fingerprint(settings.langsmith_api_key),
+    ]
+    return hashlib.sha256("\n".join(values).encode("utf-8")).hexdigest()
+
+
+def _load_runtime_pipeline(settings: Settings) -> GroundedAnswerPipeline:
+    """Keep credentials and remote clients scoped to one Streamlit session."""
+
+    signature = _runtime_signature(settings)
+    cached = st.session_state.get("_session_runtime_pipeline")
+    if isinstance(cached, dict) and cached.get("signature") == signature:
+        return cached["pipeline"]
+
+    if settings.embedding_backend in LOCAL_EMBEDDING_BACKENDS:
+        base_settings = build_runtime_settings(
+            settings.embedding_backend,
+            DEFAULT_ANSWER_PROVIDER,
+            embedding_model=settings.embedding_model,
+            embedding_dimension=settings.embedding_dimension,
+            langsmith_tracing=False,
+        )
+        base = _load_local_pipeline(
+            base_settings.embedding_backend,
+            base_settings.embedding_model,
+            base_settings.embedding_dimension,
+            _artifact_revision(base_settings),
+        )
+        if settings.llm_provider == "deterministic" and not settings.langsmith_tracing:
+            pipeline = base
+        else:
+            pipeline = GroundedAnswerPipeline.from_base(base, settings)
+    else:
+        manifest_path = settings.index_dir / "manifest.json"
+        if not manifest_path.exists():
+            LOGGER.info(
+                "Remote policy index is missing; creating it from the trusted source bundle"
+            )
+            with st.spinner(
+                f"Building the {EMBEDDING_LABELS[settings.embedding_backend]} policy index…"
+            ):
+                ingest_corpus(settings)
+        pipeline = GroundedAnswerPipeline.load(settings)
+
+    st.session_state["_session_runtime_pipeline"] = {
+        "signature": signature,
+        "pipeline": pipeline,
+    }
+    return pipeline
+
+
+def _clear_session_credentials() -> None:
+    for key in CREDENTIAL_WIDGET_KEYS.values():
+        st.session_state[key] = ""
+    st.session_state.pop("_session_runtime_pipeline", None)
 
 
 st.title("⚖️ The Grounded Answer")
@@ -182,7 +315,7 @@ try:
         DEFAULT_ANSWER_PROVIDER,
     )
     embedding_options = available_embedding_backends()
-    provider_options = available_answer_providers(capability_settings)
+    provider_options = available_answer_providers()
 except (TypeError, ValueError) as exc:
     LOGGER.exception("The Streamlit configuration is invalid")
     st.error(f"Configuration is invalid: {exc}")
@@ -201,7 +334,10 @@ with st.sidebar:
         key="embedding_backend",
         format_func=lambda value: EMBEDDING_LABELS[value],
         on_change=_runtime_selection_changed,
-        help="Hashing starts immediately. MiniLM builds and caches a separate semantic index on first use.",
+        help=(
+            "Local modes keep policy text on this server. Hosted modes send policy "
+            "clauses and questions to the selected embedding provider."
+        ),
     )
     answer_provider = st.selectbox(
         "Answer phrasing",
@@ -209,11 +345,109 @@ with st.sidebar:
         key="answer_provider",
         format_func=lambda value: PROVIDER_LABELS[value],
         on_change=_runtime_selection_changed,
-        help="Gemini appears only when its server-side package and API key are configured.",
+        help=(
+            "Model phrasing is optional. Every generated claim and source ID is "
+            "validated before the answer is displayed."
+        ),
     )
+
+    selected_embedding_model: str | None = None
+    selected_embedding_dimension = 768
+    if embedding_backend in REMOTE_EMBEDDING_KEY_PROVIDER:
+        embedding_defaults = build_runtime_settings(
+            embedding_backend,
+            DEFAULT_ANSWER_PROVIDER,
+        )
+        selected_embedding_model = st.text_input(
+            "Embedding model",
+            value=embedding_defaults.embedding_model,
+            key=f"{embedding_backend}_embedding_model",
+            on_change=_runtime_selection_changed,
+        )
+        selected_embedding_dimension = int(
+            st.number_input(
+                "Embedding dimensions",
+                min_value=128,
+                max_value=3072,
+                value=768,
+                step=128,
+                key=f"{embedding_backend}_embedding_dimension",
+                on_change=_runtime_selection_changed,
+            )
+        )
+
+    selected_answer_model: str | None = None
+    if answer_provider != DEFAULT_ANSWER_PROVIDER:
+        model_field = ANSWER_MODEL_FIELDS[answer_provider]
+        selected_answer_model = st.text_input(
+            "Answer model",
+            value=str(getattr(capability_settings, model_field)),
+            key=f"{answer_provider}_answer_model",
+            on_change=_runtime_selection_changed,
+        )
+
     runtime_status_slot = st.empty()
-    if "gemini" not in provider_options:
-        st.caption("Gemini is not configured for this deployment.")
+
+    with st.expander(
+        "Provider API keys",
+        icon=":material/key:",
+        expanded=True,
+    ):
+        st.caption(
+            "Pasted keys stay in this Streamlit session. This app does not write "
+            "them to files, logs, answers, or chat history."
+        )
+        for provider in ("gemini", "openai", "anthropic", "llama"):
+            deployment_key = answer_provider_key(capability_settings, provider)
+            st.text_input(
+                CREDENTIAL_LABELS[provider],
+                type="password",
+                key=CREDENTIAL_WIDGET_KEYS[provider],
+                placeholder=(
+                    "Deployment key configured"
+                    if deployment_key
+                    else "Paste key for this session"
+                ),
+                on_change=_runtime_selection_changed,
+            )
+
+        st.divider()
+        st.caption(
+            "LangSmith provides optional content-redacted tracing. Its API key "
+            "does not generate embeddings."
+        )
+        st.text_input(
+            CREDENTIAL_LABELS["langsmith"],
+            type="password",
+            key=CREDENTIAL_WIDGET_KEYS["langsmith"],
+            placeholder=(
+                "Deployment key configured"
+                if capability_settings.langsmith_api_key
+                else "Paste tracing key for this session"
+            ),
+            on_change=_runtime_selection_changed,
+            disabled=not langsmith_available(),
+        )
+        langsmith_tracing_requested = st.toggle(
+            "Enable redacted tracing",
+            value=False,
+            key="session_langsmith_tracing",
+            on_change=_runtime_selection_changed,
+            disabled=not langsmith_available(),
+        )
+        langsmith_project = st.text_input(
+            "Tracing project",
+            value=capability_settings.langsmith_project,
+            key="session_langsmith_project",
+            on_change=_runtime_selection_changed,
+            disabled=not langsmith_tracing_requested,
+        )
+        st.button(
+            "Clear session API keys",
+            icon=":material/key_off:",
+            use_container_width=True,
+            on_click=_clear_session_credentials,
+        )
 
     st.header("Case context")
     use_case_date = st.toggle("Use a case date", value=False)
@@ -235,20 +469,80 @@ with st.sidebar:
         st.session_state.messages = []
         st.rerun()
 
-active_embedding_backend = embedding_backend
-active_answer_provider = answer_provider
-try:
-    runtime_settings = build_runtime_settings(embedding_backend, answer_provider)
-    pipeline = _load_pipeline(
-        embedding_backend,
-        answer_provider,
-        _artifact_revision(runtime_settings),
+api_keys: dict[str, str | None] = {}
+for provider in ("gemini", "openai", "anthropic", "llama"):
+    api_keys[provider], _ = _session_credential(
+        provider,
+        capability_settings,
     )
+langsmith_api_key, _ = _session_credential(
+    "langsmith",
+    capability_settings,
+)
+
+runtime_notes: list[str] = []
+active_embedding_backend = embedding_backend
+embedding_key_provider = REMOTE_EMBEDDING_KEY_PROVIDER.get(embedding_backend)
+if embedding_key_provider and not api_keys[embedding_key_provider]:
+    active_embedding_backend = DEFAULT_EMBEDDING_BACKEND
+    runtime_notes.append(
+        f"{EMBEDDING_LABELS[embedding_backend]} requires "
+        f"{CREDENTIAL_LABELS[embedding_key_provider]}; hashing is active until one is supplied."
+    )
+
+active_answer_provider = answer_provider
+if answer_provider != DEFAULT_ANSWER_PROVIDER and not api_keys[answer_provider]:
+    active_answer_provider = DEFAULT_ANSWER_PROVIDER
+    runtime_notes.append(
+        f"{PROVIDER_LABELS[answer_provider]} requires "
+        f"{CREDENTIAL_LABELS[answer_provider]}; deterministic phrasing is active until one is supplied."
+    )
+
+active_langsmith_tracing = bool(
+    langsmith_tracing_requested
+    and langsmith_available()
+    and langsmith_api_key
+)
+if langsmith_tracing_requested and not active_langsmith_tracing:
+    runtime_notes.append(
+        "LangSmith tracing needs its API key and installed SDK; tracing remains off."
+    )
+
+try:
+    runtime_settings = build_runtime_settings(
+        active_embedding_backend,
+        active_answer_provider,
+        api_keys=api_keys,
+        embedding_model=(
+            selected_embedding_model
+            if active_embedding_backend == embedding_backend
+            else None
+        ),
+        answer_model=(
+            selected_answer_model
+            if active_answer_provider == answer_provider
+            else None
+        ),
+        embedding_dimension=(
+            selected_embedding_dimension
+            if active_embedding_backend == embedding_backend
+            and embedding_backend in REMOTE_EMBEDDING_KEY_PROVIDER
+            else None
+        ),
+        langsmith_tracing=active_langsmith_tracing,
+        langsmith_api_key=langsmith_api_key,
+        langsmith_project=langsmith_project,
+    )
+    pipeline = _load_runtime_pipeline(runtime_settings)
 except (FileNotFoundError, ImportError, RuntimeError, ValueError) as exc:
-    LOGGER.exception("The selected policy runtime could not be loaded: %s", exc)
+    LOGGER.warning(
+        "The selected policy runtime could not be loaded (%s)",
+        type(exc).__name__,
+    )
     if (
-        embedding_backend != DEFAULT_EMBEDDING_BACKEND
-        or answer_provider != DEFAULT_ANSWER_PROVIDER
+        active_embedding_backend != DEFAULT_EMBEDDING_BACKEND
+        or active_answer_provider != DEFAULT_ANSWER_PROVIDER
+        or active_langsmith_tracing
     ):
         st.warning(
             "The selected optional runtime was unavailable, so the assistant returned "
@@ -257,18 +551,22 @@ except (FileNotFoundError, ImportError, RuntimeError, ValueError) as exc:
         )
         active_embedding_backend = DEFAULT_EMBEDDING_BACKEND
         active_answer_provider = DEFAULT_ANSWER_PROVIDER
+        active_langsmith_tracing = False
+        runtime_notes.append(
+            "The optional runtime could not start; this session used verified local defaults."
+        )
         runtime_settings = build_runtime_settings(
             active_embedding_backend,
             active_answer_provider,
+            langsmith_tracing=False,
         )
-        pipeline = _load_pipeline(
-            active_embedding_backend,
-            active_answer_provider,
-            _artifact_revision(runtime_settings),
-        )
+        pipeline = _load_runtime_pipeline(runtime_settings)
     else:
         st.error("The policy sources could not be loaded safely. Please try again later.")
         st.stop()
+
+for note in runtime_notes:
+    st.info(note, icon=":material/info:")
 
 runtime_status_slot.badge(
     f"{active_embedding_backend} · {active_answer_provider}",
@@ -329,18 +627,56 @@ if prompt := st.chat_input(
         try:
             started = time.perf_counter()
             active_provider = active_answer_provider
-            fallback_note = None
+            fallback_notes = list(runtime_notes)
+            answer_settings = runtime_settings
+            answer_embedding_backend = active_embedding_backend
+            answer_tracing = active_langsmith_tracing
+            optional_runtime_failed = False
             with st.spinner("Retrieving and checking policy evidence…"):
-                answer = pipeline.ask(
-                    prompt,
-                    change_date=change_date,
-                    determination_date=determination_date,
-                )
+                try:
+                    answer = pipeline.ask(
+                        prompt,
+                        change_date=change_date,
+                        determination_date=determination_date,
+                    )
+                except Exception as optional_exc:
+                    if (
+                        active_embedding_backend == DEFAULT_EMBEDDING_BACKEND
+                        and active_answer_provider == DEFAULT_ANSWER_PROVIDER
+                        and not active_langsmith_tracing
+                    ):
+                        raise
+                    LOGGER.warning(
+                        "Optional runtime failed during a request (%s)",
+                        type(optional_exc).__name__,
+                    )
+                    fallback_settings = build_runtime_settings(
+                        DEFAULT_EMBEDDING_BACKEND,
+                        DEFAULT_ANSWER_PROVIDER,
+                        langsmith_tracing=False,
+                    )
+                    fallback_pipeline = _load_runtime_pipeline(fallback_settings)
+                    answer = fallback_pipeline.ask(
+                        prompt,
+                        change_date=change_date,
+                        determination_date=determination_date,
+                    )
+                    active_provider = DEFAULT_ANSWER_PROVIDER
+                    answer_settings = fallback_settings
+                    answer_embedding_backend = DEFAULT_EMBEDDING_BACKEND
+                    answer_tracing = False
+                    optional_runtime_failed = True
+                    fallback_notes.append(
+                        "The selected optional runtime failed during this request, so "
+                        "verified local hashing and deterministic phrasing produced "
+                        "this answer."
+                    )
                 if (
-                    active_answer_provider == "gemini"
+                    not optional_runtime_failed
+                    and active_answer_provider != DEFAULT_ANSWER_PROVIDER
                     and answer.decision.value == "REFUSE"
                     and any(
-                        marker in answer.reason.lower()
+                        marker in str(answer.reason).lower()
                         for marker in (
                             "provider safety check",
                             "coverage evaluation failed",
@@ -350,37 +686,47 @@ if prompt := st.chat_input(
                     fallback_settings = build_runtime_settings(
                         active_embedding_backend,
                         DEFAULT_ANSWER_PROVIDER,
+                        api_keys=api_keys,
+                        embedding_model=runtime_settings.embedding_model,
+                        embedding_dimension=runtime_settings.embedding_dimension,
+                        langsmith_tracing=active_langsmith_tracing,
+                        langsmith_api_key=langsmith_api_key,
+                        langsmith_project=langsmith_project,
                     )
-                    fallback_pipeline = _load_pipeline(
-                        active_embedding_backend,
-                        DEFAULT_ANSWER_PROVIDER,
-                        _artifact_revision(fallback_settings),
-                    )
+                    fallback_pipeline = _load_runtime_pipeline(fallback_settings)
                     answer = fallback_pipeline.ask(
                         prompt,
                         change_date=change_date,
                         determination_date=determination_date,
                     )
                     active_provider = DEFAULT_ANSWER_PROVIDER
-                    fallback_note = (
-                        "Gemini could not complete the validated policy workflow, so this "
-                        "answer used the deterministic fallback."
+                    fallback_notes.append(
+                        f"{PROVIDER_LABELS[active_answer_provider]} could not complete "
+                        "the validated policy workflow, so this answer used the "
+                        "deterministic fallback."
                     )
-                elif active_answer_provider == "gemini":
+                elif active_answer_provider != DEFAULT_ANSWER_PROVIDER:
                     if answer.phrasing_mode == "model":
-                        active_provider = "gemini"
+                        active_provider = active_answer_provider
                     else:
                         active_provider = DEFAULT_ANSWER_PROVIDER
-                        fallback_note = (
+                        fallback_notes.append(
                             "Model phrasing was not used for this answer; the validated "
                             "deterministic policy wording was shown."
                         )
             elapsed = time.perf_counter() - started
             payload = answer.model_dump(mode="json")
             answer_runtime = {
-                "embedding_backend": active_embedding_backend,
+                "embedding_backend": answer_embedding_backend,
+                "embedding_model": answer_settings.embedding_model,
                 "answer_provider": active_provider,
-                "fallback_note": fallback_note,
+                "answer_model": (
+                    answer_settings.answer_model
+                    if active_provider != DEFAULT_ANSWER_PROVIDER
+                    else "deterministic"
+                ),
+                "langsmith_tracing": answer_tracing,
+                "fallback_note": " ".join(fallback_notes) or None,
             }
             _render_answer(payload, answer_runtime)
             st.caption(f"Completed in {elapsed:.2f}s")
@@ -391,20 +737,33 @@ if prompt := st.chat_input(
                     "runtime": answer_runtime,
                 }
             )
-        except Exception:
-            LOGGER.exception("The Streamlit request failed safely")
+        except Exception as exc:
+            LOGGER.warning("The Streamlit request failed safely (%s)", type(exc).__name__)
             st.error(
                 "The request could not be completed safely, so no policy answer was shown. "
                 "Please try again later."
             )
 
-if active_answer_provider == "gemini":
+privacy_notes: list[str] = []
+if active_embedding_backend in REMOTE_EMBEDDING_KEY_PROVIDER:
+    privacy_notes.append(
+        f"{EMBEDDING_LABELS[active_embedding_backend]} sends policy text while building "
+        "the index and sends each question for retrieval"
+    )
+if active_answer_provider != DEFAULT_ANSWER_PROVIDER:
+    privacy_notes.append(
+        f"{PROVIDER_LABELS[active_answer_provider]} sends the question and selected "
+        "policy excerpts for validated phrasing"
+    )
+if active_langsmith_tracing:
+    privacy_notes.append("LangSmith receives only content-redacted diagnostics")
+
+if privacy_notes:
     st.caption(
-        "Privacy: Gemini mode sends the question and selected policy excerpts to the "
-        "configured Google Gemini API. Do not enter secrets or unnecessary personal information."
+        "Privacy: " + "; ".join(privacy_notes) + ". Do not enter secrets or unnecessary personal information."
     )
 else:
     st.caption(
-        "Privacy: deterministic mode does not send the question or corpus to an external model. "
-        "Do not enter secrets or unnecessary personal information."
+        "Privacy: local deterministic mode does not send the question or corpus to an "
+        "external model. Do not enter secrets or unnecessary personal information."
     )

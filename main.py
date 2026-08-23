@@ -28,6 +28,7 @@ from src.parser import (
     parse_policy_sources,
 )
 from src.pipeline import GroundedAnswerPipeline, ingest_corpus, load_source_chunks
+from src.web_runtime import ANSWER_PROVIDERS, EMBEDDING_BACKENDS
 
 
 def _iso_date(value: str) -> date:
@@ -256,7 +257,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ingest.add_argument(
         "--embedding-backend",
-        choices=("hashing", "sentence-transformers"),
+        choices=EMBEDDING_BACKENDS,
         help="Dense embedding backend (default: environment or hashing)",
     )
     ingest.set_defaults(func=cmd_ingest)
@@ -265,8 +266,8 @@ def build_parser() -> argparse.ArgumentParser:
     ask.add_argument("question")
     ask.add_argument("--corpus", type=Path, help=argparse.SUPPRESS)
     ask.add_argument("--amendment", type=Path, help=argparse.SUPPRESS)
-    ask.add_argument("--embedding-backend", choices=("hashing", "sentence-transformers"))
-    ask.add_argument("--provider", choices=("deterministic", "gemini"))
+    ask.add_argument("--embedding-backend", choices=EMBEDDING_BACKENDS)
+    ask.add_argument("--provider", choices=ANSWER_PROVIDERS)
     ask.add_argument(
         "--change-date",
         type=_iso_date,
@@ -299,7 +300,7 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--quiet", action="store_true", help="Print only summary and failures")
     evaluate.add_argument("--questions", type=Path, help="Optional labeled question-set JSON")
     evaluate.add_argument("--output-dir", type=Path, help="Directory for JSON and Markdown results")
-    evaluate.add_argument("--embedding-backend", choices=("hashing", "sentence-transformers"))
+    evaluate.add_argument("--embedding-backend", choices=EMBEDDING_BACKENDS)
     evaluate.add_argument(
         "--respect-reranking",
         action="store_true",
@@ -308,11 +309,11 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.set_defaults(func=cmd_evaluate)
 
     calibrate = commands.add_parser("calibrate", help="Sweep support thresholds over the evaluation set")
-    calibrate.add_argument("--embedding-backend", choices=("hashing", "sentence-transformers"))
+    calibrate.add_argument("--embedding-backend", choices=EMBEDDING_BACKENDS)
     calibrate.set_defaults(func=cmd_calibrate)
 
     interactive = commands.add_parser("interactive", help="Ask multiple independent questions")
-    interactive.add_argument("--embedding-backend", choices=("hashing", "sentence-transformers"))
+    interactive.add_argument("--embedding-backend", choices=EMBEDDING_BACKENDS)
     interactive.set_defaults(func=cmd_interactive)
     return parser
 

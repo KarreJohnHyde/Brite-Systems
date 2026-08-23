@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from src.embeddings import EmbeddingEngine
+from src.embeddings import EmbeddingEngine, EmbeddingUnavailableError
 from src.lexical import BM25Index
 from src.pipeline import GroundedAnswerPipeline
 from src.retriever import RerankerUnavailableError, Retriever
@@ -27,6 +27,137 @@ def test_hashing_embeddings_are_normalized_and_deterministic(chunks) -> None:
     assert vectors_a.dtype == np.float32
     np.testing.assert_array_equal(vectors_a, vectors_b)
     np.testing.assert_allclose(np.linalg.norm(vectors_a, axis=1), np.ones(3), atol=1e-6)
+
+
+def test_openai_embeddings_preserve_provider_order_and_normalize(chunks) -> None:
+    class FakeEmbeddings:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def create(self, **kwargs):
+            self.calls.append(kwargs)
+            data = [
+                types.SimpleNamespace(index=index, embedding=[index + 1.0, 1.0, 0.0])
+                for index, _ in enumerate(kwargs["input"])
+            ]
+            return types.SimpleNamespace(data=list(reversed(data)))
+
+    endpoint = FakeEmbeddings()
+    client = types.SimpleNamespace(embeddings=endpoint)
+    engine = EmbeddingEngine(
+        "text-embedding-test",
+        backend="openai",
+        dimension=3,
+        client=client,
+    )
+
+    vectors = engine.encode_clauses(chunks[:2])
+
+    assert vectors.shape == (2, 3)
+    np.testing.assert_allclose(np.linalg.norm(vectors, axis=1), np.ones(2), atol=1e-6)
+    assert vectors[0, 0] < vectors[1, 0]
+    assert endpoint.calls[0]["model"] == "text-embedding-test"
+    assert endpoint.calls[0]["dimensions"] == 3
+    assert endpoint.calls[0]["encoding_format"] == "float"
+
+
+def test_gemini_embeddings_apply_retrieval_instructions_and_normalize(chunks) -> None:
+    class FakeGeminiModels:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def embed_content(self, **kwargs):
+            self.calls.append(kwargs)
+            embeddings = [
+                types.SimpleNamespace(values=[1.0, index + 1.0, 0.0])
+                for index, _ in enumerate(kwargs["contents"])
+            ]
+            return types.SimpleNamespace(embeddings=embeddings)
+
+    models = FakeGeminiModels()
+    engine = EmbeddingEngine(
+        "gemini-embedding-2",
+        backend="gemini",
+        dimension=3,
+        client=types.SimpleNamespace(models=models),
+    )
+
+    clause_vectors = engine.encode_clauses(chunks[:2])
+    query_vector = engine.encode_query("What is the resource limit?")
+
+    assert clause_vectors.shape == (2, 3)
+    assert query_vector.shape == (1, 3)
+    np.testing.assert_allclose(
+        np.linalg.norm(clause_vectors, axis=1),
+        np.ones(2),
+        atol=1e-6,
+    )
+    assert all(
+        text.startswith("Represent this Calder County benefits policy clause")
+        for text in models.calls[0]["contents"]
+    )
+    assert models.calls[1]["contents"][0].startswith(
+        "Find Calder County policy clauses"
+    )
+    assert models.calls[0]["config"] == {"output_dimensionality": 3}
+
+
+@pytest.mark.parametrize("backend", ["openai", "gemini"])
+def test_remote_embeddings_fail_closed_on_wrong_vector_count(backend: str) -> None:
+    if backend == "openai":
+        client = types.SimpleNamespace(
+            embeddings=types.SimpleNamespace(
+                create=lambda **kwargs: types.SimpleNamespace(data=[])
+            )
+        )
+    else:
+        client = types.SimpleNamespace(
+            models=types.SimpleNamespace(
+                embed_content=lambda **kwargs: types.SimpleNamespace(embeddings=[])
+            )
+        )
+    engine = EmbeddingEngine(
+        "remote-test",
+        backend=backend,
+        dimension=3,
+        client=client,
+    )
+
+    with pytest.raises(EmbeddingUnavailableError, match="unexpected number"):
+        engine.encode_query("Question?")
+
+
+def test_remote_embeddings_retry_rate_limits_using_provider_delay() -> None:
+    calls = 0
+    delays: list[float] = []
+
+    class RateLimitError(Exception):
+        status_code = 429
+
+    def create(**kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RateLimitError("Please retry in 0.25s")
+        return types.SimpleNamespace(
+            data=[types.SimpleNamespace(index=0, embedding=[1.0, 0.0, 0.0])]
+        )
+
+    engine = EmbeddingEngine(
+        "text-embedding-test",
+        backend="openai",
+        dimension=3,
+        client=types.SimpleNamespace(
+            embeddings=types.SimpleNamespace(create=create)
+        ),
+        sleep=delays.append,
+    )
+
+    vector = engine.encode_query("Question?")
+
+    assert calls == 2
+    assert delays == [pytest.approx(0.75)]
+    np.testing.assert_array_equal(vector, np.array([[1.0, 0.0, 0.0]], dtype="float32"))
 
 
 def test_vector_index_persists_and_reloads_identical_searches(

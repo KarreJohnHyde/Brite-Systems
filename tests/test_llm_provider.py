@@ -4,7 +4,13 @@ from types import SimpleNamespace
 import json
 import pytest
 
-from src.llm import GeminiProvider, LLMProviderError
+from src.llm import (
+    AnthropicProvider,
+    GeminiProvider,
+    GroqLlamaProvider,
+    LLMProviderError,
+    OpenAIProvider,
+)
 from src.llm.prompts import (
     MASTER_PROMPT,
     COVERAGE_GATE_PROMPT,
@@ -127,3 +133,219 @@ def test_provider_wraps_transport_errors_without_network(make_chunk) -> None:
 
     with pytest.raises(LLMProviderError, match="generation request failed"):
         GeminiProvider(client=FailingClient()).generate_answer("Question?", [chunk])
+
+
+class FakeOpenAIResponses:
+    def __init__(self, response):
+        self.response = response
+        self.calls = []
+
+    def parse(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.response
+
+
+class FakeAnthropicMessages:
+    def __init__(self, response):
+        self.response = response
+        self.calls = []
+
+    def parse(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.response
+
+
+class FakeGroqCompletions:
+    def __init__(self, response):
+        self.response = response
+        self.calls = []
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.response
+
+
+def test_openai_provider_uses_responses_structured_output(make_chunk) -> None:
+    chunk = make_chunk()
+    expected = CoverageGateResult(
+        covered=True,
+        confidence=0.91,
+        matched_clause_ids=[chunk.clause_id],
+    )
+    endpoint = FakeOpenAIResponses(SimpleNamespace(output_parsed=expected))
+    client = SimpleNamespace(responses=endpoint)
+
+    result = OpenAIProvider(client=client, model="gpt-test").evaluate_coverage(
+        "What is the rule?",
+        [chunk],
+    )
+
+    assert result == expected
+    assert endpoint.calls[0]["model"] == "gpt-test"
+    assert endpoint.calls[0]["text_format"] is CoverageGateResult
+    assert "QUESTION:" in endpoint.calls[0]["input"]
+
+
+def test_anthropic_provider_uses_messages_structured_output(make_chunk) -> None:
+    chunk = make_chunk()
+    expected = GenerationSelection(
+        decision=Decision.ANSWER,
+        answer="The test rule applies.",
+        supporting_source_ids=[chunk.chunk_id],
+        reason="The source directly states the rule.",
+    )
+    endpoint = FakeAnthropicMessages(SimpleNamespace(parsed_output=expected))
+    client = SimpleNamespace(messages=endpoint)
+
+    result = AnthropicProvider(client=client, model="claude-test").generate_answer(
+        "What is the rule?",
+        [chunk],
+    )
+
+    assert result == expected
+    call = endpoint.calls[0]
+    assert call["model"] == "claude-test"
+    assert call["output_format"] is GenerationSelection
+    assert call["max_tokens"] == 2048
+    assert call["messages"][0]["role"] == "user"
+
+
+def test_llama_provider_uses_groq_json_schema_and_validates_it(make_chunk) -> None:
+    chunk = make_chunk()
+    expected = GenerationSelection(
+        decision=Decision.ANSWER,
+        answer="The test rule applies.",
+        supporting_source_ids=[chunk.chunk_id],
+        reason="The source directly states the rule.",
+    )
+    response = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content=expected.model_dump_json())
+            )
+        ]
+    )
+    endpoint = FakeGroqCompletions(response)
+    client = SimpleNamespace(
+        chat=SimpleNamespace(completions=endpoint),
+    )
+
+    result = GroqLlamaProvider(client=client, model="llama-test").generate_answer(
+        "What is the rule?",
+        [chunk],
+    )
+
+    assert result == expected
+    call = endpoint.calls[0]
+    assert call["model"] == "llama-test"
+    assert call["temperature"] == 0.0
+    assert call["response_format"]["type"] == "json_schema"
+    assert call["response_format"]["json_schema"]["schema"]["title"] == (
+        "GenerationSelection"
+    )
+
+
+@pytest.mark.parametrize(
+    ("provider", "expected_name"),
+    [
+        (
+            OpenAIProvider(
+                client=SimpleNamespace(
+                    responses=FakeOpenAIResponses(
+                        SimpleNamespace(output_parsed=None, output_text="{bad json")
+                    )
+                )
+            ),
+            "OpenAI",
+        ),
+        (
+            AnthropicProvider(
+                client=SimpleNamespace(
+                    messages=FakeAnthropicMessages(
+                        SimpleNamespace(parsed_output=None, content=[])
+                    )
+                )
+            ),
+            "Anthropic",
+        ),
+        (
+            GroqLlamaProvider(
+                client=SimpleNamespace(
+                    chat=SimpleNamespace(
+                        completions=FakeGroqCompletions(
+                            SimpleNamespace(
+                                choices=[
+                                    SimpleNamespace(
+                                        message=SimpleNamespace(content="{bad json")
+                                    )
+                                ]
+                            )
+                        )
+                    )
+                )
+            ),
+            "Llama via Groq",
+        ),
+    ],
+)
+def test_structured_providers_reject_malformed_outputs(
+    provider,
+    expected_name: str,
+    make_chunk,
+) -> None:
+    with pytest.raises(
+        LLMProviderError,
+        match=rf"{expected_name} returned invalid structured JSON",
+    ):
+        provider.evaluate_coverage("Question?", [make_chunk()])
+
+
+@pytest.mark.parametrize(
+    ("provider", "expected_name"),
+    [
+        (
+            OpenAIProvider(
+                client=SimpleNamespace(
+                    responses=SimpleNamespace(
+                        parse=lambda **kwargs: (_ for _ in ()).throw(TimeoutError())
+                    )
+                )
+            ),
+            "OpenAI",
+        ),
+        (
+            AnthropicProvider(
+                client=SimpleNamespace(
+                    messages=SimpleNamespace(
+                        parse=lambda **kwargs: (_ for _ in ()).throw(TimeoutError())
+                    )
+                )
+            ),
+            "Anthropic",
+        ),
+        (
+            GroqLlamaProvider(
+                client=SimpleNamespace(
+                    chat=SimpleNamespace(
+                        completions=SimpleNamespace(
+                            create=lambda **kwargs: (_ for _ in ()).throw(
+                                TimeoutError()
+                            )
+                        )
+                    )
+                )
+            ),
+            "Llama via Groq",
+        ),
+    ],
+)
+def test_structured_providers_wrap_transport_errors(
+    provider,
+    expected_name: str,
+    make_chunk,
+) -> None:
+    with pytest.raises(
+        LLMProviderError,
+        match=rf"{expected_name} generation request failed \(TimeoutError\)",
+    ):
+        provider.evaluate_coverage("Question?", [make_chunk()])
