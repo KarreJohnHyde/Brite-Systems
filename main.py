@@ -18,7 +18,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from config.settings import Settings
-from src.models import Decision, PolicyAnswer
+from src.models import PolicyAnswer
 from src.parser import build_corpus_report, find_chunks, parse_policy_manual
 from src.pipeline import GroundedAnswerPipeline, ingest_corpus, load_source_chunks
 

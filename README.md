@@ -393,7 +393,8 @@ Provider errors, malformed output, unsupported claims, decision changes, and
 invalid source IDs are discarded. The assistant then shows the already
 validated exact policy text and trusted citation; rejected model text is never
 rendered. If that fallback also fails validation, the pipeline returns
-`REFUSE`.
+`REFUSE`. A credential-redacted live supported/refusal check is recorded in the
+[`Gemini provider smoke report`](evaluation/results/model-training/county-hsp-local-v1-s42/provider-smoke.md).
 
 ## Optional LangSmith tracing
 

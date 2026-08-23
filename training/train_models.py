@@ -17,17 +17,12 @@ import os
 import platform
 import random
 import statistics
-import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-
-ROOT = Path(__file__).resolve().parent.parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
 from config.settings import Settings
 from evaluation.evaluate import run_evaluation
@@ -44,6 +39,7 @@ from training.data import (
 )
 from training.metrics import binary_metrics, ranking_metrics
 
+ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_QUESTIONS = (
     ROOT / "evaluation" / "questions.json",
     ROOT / "evaluation" / "adversarial_questions.json",

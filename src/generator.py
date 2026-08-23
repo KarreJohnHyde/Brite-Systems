@@ -198,7 +198,6 @@ class AnswerBuilder:
 
         # A selected cross-reference can be material to a compound answer (for
         # example the review-completion period incorporated by §12.1.3).
-        selected_clause_ids = {item.chunk.clause_id for item in selected}
         selected_refs = {reference for item in selected for reference in item.chunk.cross_references}
         for result, assessment in pairs:
             if (
