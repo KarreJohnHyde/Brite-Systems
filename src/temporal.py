@@ -198,7 +198,10 @@ REPORTING_TOPIC_RE = re.compile(
 REPORT_ACTION_RE = re.compile(r"\breport(?:s|ed|ing)?\b", re.IGNORECASE)
 REPORTING_OVERPAYMENT_RE = re.compile(
     r"\b(overpayment|recover(?:y|able)|protection|conflict|inconsisten(?:t|cy)|"
-    r"9\.1\.4|10\s*(?:or|versus|vs\.?)\s*30|department\b.{0,30}\b(?:act|position))\b",
+    r"9\.1\.4|10\s*(?:or|versus|vs\.?)\s*30|"
+    r"10\s*(?:calendar\s*)?days?\b.{0,25}\b30\s*(?:calendar\s*)?days?|"
+    r"30\s*(?:calendar\s*)?days?\b.{0,25}\b10\s*(?:calendar\s*)?days?|"
+    r"department\b.{0,30}\b(?:act|position))\b",
     re.IGNORECASE,
 )
 SANCTION_RATE_RE = re.compile(

@@ -50,8 +50,8 @@ def test_reviewed_folds_cover_every_case_once_without_clause_leakage(
         "REFUSE": 7,
     }
     assert Counter(case["expected_decision"] for case in folds["fold_2"]["test"]) == {
-        "ANSWER": 8,
-        "CONFLICT": 2,
+        "ANSWER": 9,
+        "CONFLICT": 1,
         "REFUSE": 7,
     }
 

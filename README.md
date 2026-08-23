@@ -336,9 +336,9 @@ Latest local verification for the checked-in source bundle:
 | --- | --- |
 | Core source-derived suite | 18 / 18 strict cases passed |
 | Adversarial suite | 15 / 15 strict cases passed |
-| Date-sensitive amendment suite | 16 / 16 strict cases passed, including amendment-locator assertions and sentence-separated reporting intent |
+| Date-sensitive amendment suite | 17 / 17 strict cases passed, including structured dates, amendment locators, reporting-duty scope, and the historical overpayment conflict |
 | Offline calibration | Recommended `REFUSAL_THRESHOLD=0.58`, `DIRECT_COVERAGE_THRESHOLD=0.34`; zero false answers and zero missed conflicts on the development set |
-| Automated regression suite | 145 tests passed |
+| Automated regression suite | 149 tests passed |
 
 These are local development measurements, not a claim of legal correctness or
 generalization beyond the supplied sources and the recorded cases.

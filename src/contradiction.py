@@ -23,7 +23,9 @@ NUMERIC_INTENT_RE = re.compile(
 )
 REPORTING_OVERPAYMENT_SCOPE_RE = re.compile(
     r"\b(overpayment|recover(?:y|able)|protection|conflict|inconsisten(?:t|cy)|"
-    r"9\.1\.4|10\s*(?:or|versus|vs\.?)\s*30)\b",
+    r"9\.1\.4|10\s*(?:or|versus|vs\.?)\s*30|"
+    r"10\s*(?:calendar\s*)?days?\b.{0,25}\b30\s*(?:calendar\s*)?days?|"
+    r"30\s*(?:calendar\s*)?days?\b.{0,25}\b10\s*(?:calendar\s*)?days?)\b",
     re.IGNORECASE,
 )
 REPORTING_DEADLINE_PAIR = frozenset({"4.3.2", "9.1.4"})
