@@ -7,5 +7,8 @@ pydantic==2.13.4
 python-dotenv==1.2.3
 faiss-cpu==1.15.0
 
+# Web application (required by Streamlit Community Cloud)
+streamlit==1.62.0
+
 # Tests
 pytest==9.1.1

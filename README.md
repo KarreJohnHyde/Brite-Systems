@@ -501,12 +501,33 @@ policy excerpts, and full debug traces are excluded by a strict allowlist.
 
 ## Streamlit interface
 
-After ingestion:
+For local use:
 
 ```powershell
 python -m pip install -r requirements-ui.txt
 python -m streamlit run app.py
 ```
+
+On a fresh clone, the web app creates the missing deterministic hashing index
+from the checked-in policy sources before serving its first session. Existing
+indexes are still integrity checked and are never silently rebuilt when stale
+or mismatched.
+
+### Streamlit Community Cloud
+
+This repository can be deployed directly with these settings:
+
+| Setting | Value |
+| :-- | :-- |
+| Repository | `KarreJohnHyde/Brite-Systems` |
+| Branch | `main` |
+| Main file path | `app.py` |
+| Python | `3.11` or newer |
+
+The default hashing/deterministic mode needs no secrets. Optional Gemini mode
+requires `GEMINI_API_KEY` and `LLM_PROVIDER=gemini` in the app's Streamlit
+secrets or environment. Community Cloud installs the root `requirements.txt`,
+which includes the pinned Streamlit runtime.
 
 The sidebar selects the embedding backend and answer provider. Its backend must
 match the index built by `ingest`. The page displays the active base manual and

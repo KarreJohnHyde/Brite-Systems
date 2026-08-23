@@ -16,7 +16,7 @@ from typing import Any
 import streamlit as st
 
 from config.settings import Settings
-from src.pipeline import GroundedAnswerPipeline
+from src.pipeline import GroundedAnswerPipeline, ingest_corpus
 
 
 LOGGER = logging.getLogger("grounded_answer.streamlit")
@@ -119,6 +119,10 @@ def _load_pipeline(
         embedding_backend=embedding_backend,
         llm_provider=provider,
     )
+    manifest_path = settings.index_dir / "manifest.json"
+    if not manifest_path.exists():
+        LOGGER.info("Policy index is missing; creating it from the trusted source bundle")
+        ingest_corpus(settings)
     return GroundedAnswerPipeline.load(settings)
 
 
