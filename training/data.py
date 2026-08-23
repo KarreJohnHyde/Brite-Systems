@@ -11,19 +11,47 @@ from evaluation.metrics import load_questions, validate_question_clause_ids
 from src.models import PolicyChunk
 from src.parser import get_embedding_text
 
-
 # These folds keep every expected-evidence clause on only one side. Closely
 # related paraphrases (for example Q01/A01/A02) stay together as well.
 FOLD_1_IDS = frozenset(
     {
-        "Q01", "Q03", "Q04", "Q07", "Q08", "Q09", "Q10", "Q13",
-        "Q14", "Q18", "A01", "A02", "A06", "A08", "A09", "A12",
+        "Q01",
+        "Q03",
+        "Q04",
+        "Q07",
+        "Q08",
+        "Q09",
+        "Q10",
+        "Q13",
+        "Q14",
+        "Q18",
+        "A01",
+        "A02",
+        "A06",
+        "A08",
+        "A09",
+        "A12",
     }
 )
 FOLD_2_IDS = frozenset(
     {
-        "Q02", "Q05", "Q06", "Q11", "Q12", "Q15", "Q16", "Q17",
-        "A03", "A04", "A05", "A07", "A10", "A11", "A13", "A14", "A15",
+        "Q02",
+        "Q05",
+        "Q06",
+        "Q11",
+        "Q12",
+        "Q15",
+        "Q16",
+        "Q17",
+        "A03",
+        "A04",
+        "A05",
+        "A07",
+        "A10",
+        "A11",
+        "A13",
+        "A14",
+        "A15",
     }
 )
 
@@ -44,9 +72,13 @@ def load_training_cases(
             case_id = str(raw["id"])
             normalized = re.sub(r"\W+", " ", str(raw["question"]).lower()).strip()
             if case_id in seen_ids:
-                raise ValueError(f"Duplicate training question ID across files: {case_id}")
+                raise ValueError(
+                    f"Duplicate training question ID across files: {case_id}"
+                )
             if normalized in seen_questions:
-                raise ValueError(f"Duplicate normalized training question across files: {case_id}")
+                raise ValueError(
+                    f"Duplicate normalized training question across files: {case_id}"
+                )
             case = dict(raw)
             case["source_path"] = str(source)
             cases.append(case)
@@ -166,7 +198,9 @@ def build_training_rows(
     for case in cases:
         question = str(case["question"])
         case_id = str(case["id"])
-        positives = [by_clause[clause_id] for clause_id in case["expected_evidence_clause_ids"]]
+        positives = [
+            by_clause[clause_id] for clause_id in case["expected_evidence_clause_ids"]
+        ]
         negative_ids = negatives_by_case[case_id][:negatives_per_query]
         negatives = [by_clause[clause_id] for clause_id in negative_ids]
 
@@ -198,7 +232,9 @@ def build_training_rows(
         for negative in negatives:
             key = (case_id, str(negative.clause_id))
             if key in pair_keys:
-                raise ValueError(f"A gold clause was also labeled negative for {case_id}: {negative.clause_id}")
+                raise ValueError(
+                    f"A gold clause was also labeled negative for {case_id}: {negative.clause_id}"
+                )
             pairs.append(
                 {
                     "query": question,

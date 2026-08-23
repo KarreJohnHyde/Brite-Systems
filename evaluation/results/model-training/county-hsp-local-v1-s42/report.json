@@ -1,0 +1,1225 @@
+{
+  "schema_version": 1,
+  "status": "complete",
+  "run_name": "county-hsp-local-v1-s42",
+  "generated_at_utc": "2026-08-23T04:08:31.750103+00:00",
+  "methodology": {
+    "split": "two-fold rotating clause-disjoint cross-validation",
+    "held_out_once": true,
+    "negative_mining": "base dense plus BM25 RRF; excludes gold, same-section, adjacent, cross-referenced, and held-out evidence context",
+    "generation_training": false,
+    "generation_training_reason": "No human-authored target answers are present and the configured Gemini model is hosted.",
+    "promotion_policy": "Experimental candidate only; a new blind staff-query set is required before production promotion."
+  },
+  "environment": {
+    "python": "3.14.7",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 140 Stepping 1, GenuineIntel",
+    "torch": {
+      "version": "2.13.0+cpu",
+      "cuda_available": false
+    },
+    "packages": {
+      "torch": "2.13.0",
+      "sentence-transformers": "6.0.0",
+      "transformers": "5.15.1",
+      "datasets": "5.0.1",
+      "accelerate": "1.14.0",
+      "faiss-cpu": "1.15.0",
+      "numpy": "2.4.6"
+    }
+  },
+  "inputs": {
+    "corpus": {
+      "path": "data/policy-manual.md",
+      "sha256": "e595d8d82c3c07c840ca1fefab95a22c6ca5d83e027c1c259953f24b33ec6b57",
+      "bytes": 29302
+    },
+    "question_files": [
+      {
+        "path": "evaluation/questions.json",
+        "sha256": "1ec8dff3f7b0fe9a2a11264575a1aa831c9faaec4b87ef0af130eaff78a323eb",
+        "bytes": 13580
+      },
+      {
+        "path": "evaluation/adversarial_questions.json",
+        "sha256": "1a63fe9211ee6b12b9bea5c7a720992eb45d84e357a1a0f0c9a3f4758bb8b8bd",
+        "bytes": 7064
+      }
+    ],
+    "queries": 33,
+    "clauses": 148,
+    "expected_evidence_pairs": 65,
+    "decision_counts": {
+      "ANSWER": 16,
+      "CONFLICT": 3,
+      "REFUSE": 14
+    }
+  },
+  "base_models": {
+    "bi_encoder": {
+      "reference": "sentence-transformers/all-MiniLM-L6-v2",
+      "cached_revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+      "trainable_here": true
+    },
+    "cross_encoder": {
+      "reference": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      "cached_revision": "233902d25c440f23af6f7d6e94d2946bac0bee0a",
+      "trainable_here": true
+    },
+    "gemini": {
+      "reference": "configured hosted API model",
+      "trainable_here": false,
+      "test_scope": "behavioral provider and grounded-output contract only"
+    },
+    "deterministic_components": {
+      "components": [
+        "stable hashing embeddings",
+        "BM25",
+        "FAISS IndexFlatIP",
+        "evidence/decision/conflict/citation/refusal rules"
+      ],
+      "trainable": false,
+      "test_scope": "unit, retrieval, and end-to-end regression tests"
+    }
+  },
+  "hyperparameters": {
+    "seeds": [
+      42
+    ],
+    "negatives_per_query": 3,
+    "candidate_k": 24,
+    "embedding_epochs": 2.0,
+    "reranker_epochs": 2.0,
+    "embedding_batch_size": 8,
+    "reranker_batch_size": 8,
+    "embedding_learning_rate": 2e-05,
+    "reranker_learning_rate": 1e-05,
+    "max_sequence_length": 256,
+    "triplet_margin": 0.2,
+    "optimizer": "adamw_torch",
+    "device": "cpu"
+  },
+  "folds": {
+    "fold_1": {
+      "train_ids": [
+        "A03",
+        "A04",
+        "A05",
+        "A07",
+        "A10",
+        "A11",
+        "A13",
+        "A14",
+        "A15",
+        "Q02",
+        "Q05",
+        "Q06",
+        "Q11",
+        "Q12",
+        "Q15",
+        "Q16",
+        "Q17"
+      ],
+      "test_ids": [
+        "A01",
+        "A02",
+        "A06",
+        "A08",
+        "A09",
+        "A12",
+        "Q01",
+        "Q03",
+        "Q04",
+        "Q07",
+        "Q08",
+        "Q09",
+        "Q10",
+        "Q13",
+        "Q14",
+        "Q18"
+      ]
+    },
+    "fold_2": {
+      "train_ids": [
+        "A01",
+        "A02",
+        "A06",
+        "A08",
+        "A09",
+        "A12",
+        "Q01",
+        "Q03",
+        "Q04",
+        "Q07",
+        "Q08",
+        "Q09",
+        "Q10",
+        "Q13",
+        "Q14",
+        "Q18"
+      ],
+      "test_ids": [
+        "A03",
+        "A04",
+        "A05",
+        "A07",
+        "A10",
+        "A11",
+        "A13",
+        "A14",
+        "A15",
+        "Q02",
+        "Q05",
+        "Q06",
+        "Q11",
+        "Q12",
+        "Q15",
+        "Q16",
+        "Q17"
+      ]
+    }
+  },
+  "cross_validation": [
+    {
+      "fold": "fold_1",
+      "seed": 42,
+      "train_queries": 17,
+      "test_queries": 16,
+      "bi_encoder_triplets": 63,
+      "cross_encoder_pairs": 72,
+      "dense": {
+        "evaluated_queries": 15,
+        "excluded_no_evidence_queries": 1,
+        "expected_clauses": 44,
+        "mrr": 0.768966,
+        "recall_at_1": 0.227273,
+        "complete_case_recall_at_1": 0.133333,
+        "hit_rate_at_1": 0.666667,
+        "ndcg_at_1": 0.666667,
+        "recall_at_3": 0.409091,
+        "complete_case_recall_at_3": 0.333333,
+        "hit_rate_at_3": 0.866667,
+        "ndcg_at_3": 0.606124,
+        "recall_at_6": 0.522727,
+        "complete_case_recall_at_6": 0.4,
+        "hit_rate_at_6": 0.933333,
+        "ndcg_at_6": 0.611589,
+        "recall_at_10": 0.704545,
+        "complete_case_recall_at_10": 0.533333,
+        "hit_rate_at_10": 0.933333,
+        "ndcg_at_10": 0.676281,
+        "recall_at_24": 0.886364,
+        "complete_case_recall_at_24": 0.733333,
+        "hit_rate_at_24": 0.933333,
+        "ndcg_at_24": 0.721583
+      },
+      "reranked": {
+        "evaluated_queries": 15,
+        "excluded_no_evidence_queries": 1,
+        "expected_clauses": 44,
+        "mrr": 0.841188,
+        "recall_at_1": 0.272727,
+        "complete_case_recall_at_1": 0.2,
+        "hit_rate_at_1": 0.8,
+        "ndcg_at_1": 0.8,
+        "recall_at_3": 0.522727,
+        "complete_case_recall_at_3": 0.533333,
+        "hit_rate_at_3": 0.866667,
+        "ndcg_at_3": 0.74488,
+        "recall_at_6": 0.613636,
+        "complete_case_recall_at_6": 0.6,
+        "hit_rate_at_6": 0.866667,
+        "ndcg_at_6": 0.732231,
+        "recall_at_10": 0.727273,
+        "complete_case_recall_at_10": 0.666667,
+        "hit_rate_at_10": 0.866667,
+        "ndcg_at_10": 0.768447,
+        "recall_at_24": 0.886364,
+        "complete_case_recall_at_24": 0.733333,
+        "hit_rate_at_24": 0.933333,
+        "ndcg_at_24": 0.807863
+      },
+      "cross_encoder_binary": {
+        "examples": 92,
+        "positives": 44,
+        "negatives": 48,
+        "zero_logit_accuracy": 0.586957,
+        "roc_auc": 0.60464,
+        "mean_positive_logit": -3.146959,
+        "mean_negative_logit": -5.46263
+      },
+      "artifacts": {
+        "bi_encoder": {
+          "path": "models/candidates/county-hsp-local-v1-s42/fold_1/seed_42/bi_encoder",
+          "sha256": "0d46442ef03ebf6c928ab2da8616485006a008431714472768d3ef04afb9f2c8",
+          "files": 9,
+          "bytes": 91578405
+        },
+        "cross_encoder": {
+          "path": "models/candidates/county-hsp-local-v1-s42/fold_1/seed_42/cross_encoder",
+          "sha256": "2fc7f937d1f89ce09681f00264b4ae837aa2cba090bb742ad00e2ea5f9330aae",
+          "files": 7,
+          "bytes": 91580119
+        }
+      },
+      "duration_seconds": 57.719
+    },
+    {
+      "fold": "fold_2",
+      "seed": 42,
+      "train_queries": 16,
+      "test_queries": 17,
+      "bi_encoder_triplets": 132,
+      "cross_encoder_pairs": 92,
+      "dense": {
+        "evaluated_queries": 11,
+        "excluded_no_evidence_queries": 6,
+        "expected_clauses": 21,
+        "mrr": 0.828283,
+        "recall_at_1": 0.380952,
+        "complete_case_recall_at_1": 0.181818,
+        "hit_rate_at_1": 0.727273,
+        "ndcg_at_1": 0.727273,
+        "recall_at_3": 0.714286,
+        "complete_case_recall_at_3": 0.545455,
+        "hit_rate_at_3": 0.909091,
+        "ndcg_at_3": 0.716201,
+        "recall_at_6": 0.809524,
+        "complete_case_recall_at_6": 0.727273,
+        "hit_rate_at_6": 0.909091,
+        "ndcg_at_6": 0.747821,
+        "recall_at_10": 0.904762,
+        "complete_case_recall_at_10": 0.909091,
+        "hit_rate_at_10": 1.0,
+        "ndcg_at_10": 0.791967,
+        "recall_at_24": 0.904762,
+        "complete_case_recall_at_24": 0.909091,
+        "hit_rate_at_24": 1.0,
+        "ndcg_at_24": 0.791967
+      },
+      "reranked": {
+        "evaluated_queries": 11,
+        "excluded_no_evidence_queries": 6,
+        "expected_clauses": 21,
+        "mrr": 0.831169,
+        "recall_at_1": 0.380952,
+        "complete_case_recall_at_1": 0.181818,
+        "hit_rate_at_1": 0.727273,
+        "ndcg_at_1": 0.727273,
+        "recall_at_3": 0.714286,
+        "complete_case_recall_at_3": 0.636364,
+        "hit_rate_at_3": 0.909091,
+        "ndcg_at_3": 0.736383,
+        "recall_at_6": 0.714286,
+        "complete_case_recall_at_6": 0.636364,
+        "hit_rate_at_6": 0.909091,
+        "ndcg_at_6": 0.72921,
+        "recall_at_10": 0.904762,
+        "complete_case_recall_at_10": 0.909091,
+        "hit_rate_at_10": 1.0,
+        "ndcg_at_10": 0.807507,
+        "recall_at_24": 0.904762,
+        "complete_case_recall_at_24": 0.909091,
+        "hit_rate_at_24": 1.0,
+        "ndcg_at_24": 0.807507
+      },
+      "cross_encoder_binary": {
+        "examples": 72,
+        "positives": 21,
+        "negatives": 51,
+        "zero_logit_accuracy": 0.722222,
+        "roc_auc": 0.80112,
+        "mean_positive_logit": 2.755855,
+        "mean_negative_logit": -3.331816
+      },
+      "artifacts": {
+        "bi_encoder": {
+          "path": "models/candidates/county-hsp-local-v1-s42/fold_2/seed_42/bi_encoder",
+          "sha256": "aae1ee30f6d1a80538bff9557e6896beb81a059f201612df319a286c1eb75959",
+          "files": 9,
+          "bytes": 91578405
+        },
+        "cross_encoder": {
+          "path": "models/candidates/county-hsp-local-v1-s42/fold_2/seed_42/cross_encoder",
+          "sha256": "1f7936f8246f94473bcc763b9d4d6b57b715252a06f878d5bdd9a683db4a966f",
+          "files": 7,
+          "bytes": 91580119
+        }
+      },
+      "duration_seconds": 117.227
+    }
+  ],
+  "baseline": {
+    "dense": {
+      "evaluated_queries": 26,
+      "excluded_no_evidence_queries": 7,
+      "expected_clauses": 65,
+      "mrr": 0.836429,
+      "recall_at_1": 0.307692,
+      "complete_case_recall_at_1": 0.192308,
+      "hit_rate_at_1": 0.769231,
+      "ndcg_at_1": 0.769231,
+      "recall_at_3": 0.523077,
+      "complete_case_recall_at_3": 0.5,
+      "hit_rate_at_3": 0.884615,
+      "ndcg_at_3": 0.690069,
+      "recall_at_6": 0.661538,
+      "complete_case_recall_at_6": 0.653846,
+      "hit_rate_at_6": 0.884615,
+      "ndcg_at_6": 0.719269,
+      "recall_at_10": 0.769231,
+      "complete_case_recall_at_10": 0.692308,
+      "hit_rate_at_10": 0.923077,
+      "ndcg_at_10": 0.749199,
+      "recall_at_24": 0.876923,
+      "complete_case_recall_at_24": 0.807692,
+      "hit_rate_at_24": 0.961538,
+      "ndcg_at_24": 0.779684
+    },
+    "reranked": {
+      "evaluated_queries": 26,
+      "excluded_no_evidence_queries": 7,
+      "expected_clauses": 65,
+      "mrr": 0.835891,
+      "recall_at_1": 0.307692,
+      "complete_case_recall_at_1": 0.192308,
+      "hit_rate_at_1": 0.769231,
+      "ndcg_at_1": 0.769231,
+      "recall_at_3": 0.553846,
+      "complete_case_recall_at_3": 0.538462,
+      "hit_rate_at_3": 0.884615,
+      "ndcg_at_3": 0.720872,
+      "recall_at_6": 0.646154,
+      "complete_case_recall_at_6": 0.653846,
+      "hit_rate_at_6": 0.884615,
+      "ndcg_at_6": 0.728078,
+      "recall_at_10": 0.753846,
+      "complete_case_recall_at_10": 0.769231,
+      "hit_rate_at_10": 0.923077,
+      "ndcg_at_10": 0.769014,
+      "recall_at_24": 0.876923,
+      "complete_case_recall_at_24": 0.807692,
+      "hit_rate_at_24": 0.961538,
+      "ndcg_at_24": 0.79541
+    },
+    "cross_encoder_binary": {
+      "examples": 164,
+      "positives": 65,
+      "negatives": 99,
+      "zero_logit_accuracy": 0.670732,
+      "roc_auc": 0.653458,
+      "mean_positive_logit": -1.930717,
+      "mean_negative_logit": -5.400045
+    }
+  },
+  "cross_validation_summary": {
+    "per_seed": [
+      {
+        "seed": 42,
+        "dense": {
+          "evaluated_queries": 26,
+          "excluded_no_evidence_queries": 7,
+          "expected_clauses": 65,
+          "mrr": 0.794061,
+          "recall_at_1": 0.276923,
+          "complete_case_recall_at_1": 0.153846,
+          "hit_rate_at_1": 0.692308,
+          "ndcg_at_1": 0.692308,
+          "recall_at_3": 0.507692,
+          "complete_case_recall_at_3": 0.423077,
+          "hit_rate_at_3": 0.884615,
+          "ndcg_at_3": 0.652695,
+          "recall_at_6": 0.615385,
+          "complete_case_recall_at_6": 0.538462,
+          "hit_rate_at_6": 0.923077,
+          "ndcg_at_6": 0.669226,
+          "recall_at_10": 0.769231,
+          "complete_case_recall_at_10": 0.692308,
+          "hit_rate_at_10": 0.961538,
+          "ndcg_at_10": 0.725225,
+          "recall_at_24": 0.892308,
+          "complete_case_recall_at_24": 0.807692,
+          "hit_rate_at_24": 0.961538,
+          "ndcg_at_24": 0.751361
+        },
+        "reranked": {
+          "evaluated_queries": 26,
+          "excluded_no_evidence_queries": 7,
+          "expected_clauses": 65,
+          "mrr": 0.836949,
+          "recall_at_1": 0.307692,
+          "complete_case_recall_at_1": 0.192308,
+          "hit_rate_at_1": 0.769231,
+          "ndcg_at_1": 0.769231,
+          "recall_at_3": 0.584615,
+          "complete_case_recall_at_3": 0.576923,
+          "hit_rate_at_3": 0.884615,
+          "ndcg_at_3": 0.741285,
+          "recall_at_6": 0.646154,
+          "complete_case_recall_at_6": 0.615385,
+          "hit_rate_at_6": 0.884615,
+          "ndcg_at_6": 0.730953,
+          "recall_at_10": 0.784615,
+          "complete_case_recall_at_10": 0.769231,
+          "hit_rate_at_10": 0.923077,
+          "ndcg_at_10": 0.784972,
+          "recall_at_24": 0.892308,
+          "complete_case_recall_at_24": 0.807692,
+          "hit_rate_at_24": 0.961538,
+          "ndcg_at_24": 0.807712
+        },
+        "cross_encoder_binary": {
+          "examples": 164,
+          "positives": 65,
+          "negatives": 99,
+          "zero_logit_accuracy": 0.646341,
+          "roc_auc": 0.640715,
+          "mean_positive_logit": -1.239896,
+          "mean_negative_logit": -4.364938
+        },
+        "folds": [
+          {
+            "fold": "fold_1",
+            "seed": 42,
+            "train_queries": 17,
+            "test_queries": 16,
+            "bi_encoder_triplets": 63,
+            "cross_encoder_pairs": 72,
+            "dense": {
+              "evaluated_queries": 15,
+              "excluded_no_evidence_queries": 1,
+              "expected_clauses": 44,
+              "mrr": 0.768966,
+              "recall_at_1": 0.227273,
+              "complete_case_recall_at_1": 0.133333,
+              "hit_rate_at_1": 0.666667,
+              "ndcg_at_1": 0.666667,
+              "recall_at_3": 0.409091,
+              "complete_case_recall_at_3": 0.333333,
+              "hit_rate_at_3": 0.866667,
+              "ndcg_at_3": 0.606124,
+              "recall_at_6": 0.522727,
+              "complete_case_recall_at_6": 0.4,
+              "hit_rate_at_6": 0.933333,
+              "ndcg_at_6": 0.611589,
+              "recall_at_10": 0.704545,
+              "complete_case_recall_at_10": 0.533333,
+              "hit_rate_at_10": 0.933333,
+              "ndcg_at_10": 0.676281,
+              "recall_at_24": 0.886364,
+              "complete_case_recall_at_24": 0.733333,
+              "hit_rate_at_24": 0.933333,
+              "ndcg_at_24": 0.721583
+            },
+            "reranked": {
+              "evaluated_queries": 15,
+              "excluded_no_evidence_queries": 1,
+              "expected_clauses": 44,
+              "mrr": 0.841188,
+              "recall_at_1": 0.272727,
+              "complete_case_recall_at_1": 0.2,
+              "hit_rate_at_1": 0.8,
+              "ndcg_at_1": 0.8,
+              "recall_at_3": 0.522727,
+              "complete_case_recall_at_3": 0.533333,
+              "hit_rate_at_3": 0.866667,
+              "ndcg_at_3": 0.74488,
+              "recall_at_6": 0.613636,
+              "complete_case_recall_at_6": 0.6,
+              "hit_rate_at_6": 0.866667,
+              "ndcg_at_6": 0.732231,
+              "recall_at_10": 0.727273,
+              "complete_case_recall_at_10": 0.666667,
+              "hit_rate_at_10": 0.866667,
+              "ndcg_at_10": 0.768447,
+              "recall_at_24": 0.886364,
+              "complete_case_recall_at_24": 0.733333,
+              "hit_rate_at_24": 0.933333,
+              "ndcg_at_24": 0.807863
+            },
+            "cross_encoder_binary": {
+              "examples": 92,
+              "positives": 44,
+              "negatives": 48,
+              "zero_logit_accuracy": 0.586957,
+              "roc_auc": 0.60464,
+              "mean_positive_logit": -3.146959,
+              "mean_negative_logit": -5.46263
+            },
+            "artifacts": {
+              "bi_encoder": {
+                "path": "models/candidates/county-hsp-local-v1-s42/fold_1/seed_42/bi_encoder",
+                "sha256": "0d46442ef03ebf6c928ab2da8616485006a008431714472768d3ef04afb9f2c8",
+                "files": 9,
+                "bytes": 91578405
+              },
+              "cross_encoder": {
+                "path": "models/candidates/county-hsp-local-v1-s42/fold_1/seed_42/cross_encoder",
+                "sha256": "2fc7f937d1f89ce09681f00264b4ae837aa2cba090bb742ad00e2ea5f9330aae",
+                "files": 7,
+                "bytes": 91580119
+              }
+            },
+            "duration_seconds": 57.719
+          },
+          {
+            "fold": "fold_2",
+            "seed": 42,
+            "train_queries": 16,
+            "test_queries": 17,
+            "bi_encoder_triplets": 132,
+            "cross_encoder_pairs": 92,
+            "dense": {
+              "evaluated_queries": 11,
+              "excluded_no_evidence_queries": 6,
+              "expected_clauses": 21,
+              "mrr": 0.828283,
+              "recall_at_1": 0.380952,
+              "complete_case_recall_at_1": 0.181818,
+              "hit_rate_at_1": 0.727273,
+              "ndcg_at_1": 0.727273,
+              "recall_at_3": 0.714286,
+              "complete_case_recall_at_3": 0.545455,
+              "hit_rate_at_3": 0.909091,
+              "ndcg_at_3": 0.716201,
+              "recall_at_6": 0.809524,
+              "complete_case_recall_at_6": 0.727273,
+              "hit_rate_at_6": 0.909091,
+              "ndcg_at_6": 0.747821,
+              "recall_at_10": 0.904762,
+              "complete_case_recall_at_10": 0.909091,
+              "hit_rate_at_10": 1.0,
+              "ndcg_at_10": 0.791967,
+              "recall_at_24": 0.904762,
+              "complete_case_recall_at_24": 0.909091,
+              "hit_rate_at_24": 1.0,
+              "ndcg_at_24": 0.791967
+            },
+            "reranked": {
+              "evaluated_queries": 11,
+              "excluded_no_evidence_queries": 6,
+              "expected_clauses": 21,
+              "mrr": 0.831169,
+              "recall_at_1": 0.380952,
+              "complete_case_recall_at_1": 0.181818,
+              "hit_rate_at_1": 0.727273,
+              "ndcg_at_1": 0.727273,
+              "recall_at_3": 0.714286,
+              "complete_case_recall_at_3": 0.636364,
+              "hit_rate_at_3": 0.909091,
+              "ndcg_at_3": 0.736383,
+              "recall_at_6": 0.714286,
+              "complete_case_recall_at_6": 0.636364,
+              "hit_rate_at_6": 0.909091,
+              "ndcg_at_6": 0.72921,
+              "recall_at_10": 0.904762,
+              "complete_case_recall_at_10": 0.909091,
+              "hit_rate_at_10": 1.0,
+              "ndcg_at_10": 0.807507,
+              "recall_at_24": 0.904762,
+              "complete_case_recall_at_24": 0.909091,
+              "hit_rate_at_24": 1.0,
+              "ndcg_at_24": 0.807507
+            },
+            "cross_encoder_binary": {
+              "examples": 72,
+              "positives": 21,
+              "negatives": 51,
+              "zero_logit_accuracy": 0.722222,
+              "roc_auc": 0.80112,
+              "mean_positive_logit": 2.755855,
+              "mean_negative_logit": -3.331816
+            },
+            "artifacts": {
+              "bi_encoder": {
+                "path": "models/candidates/county-hsp-local-v1-s42/fold_2/seed_42/bi_encoder",
+                "sha256": "aae1ee30f6d1a80538bff9557e6896beb81a059f201612df319a286c1eb75959",
+                "files": 9,
+                "bytes": 91578405
+              },
+              "cross_encoder": {
+                "path": "models/candidates/county-hsp-local-v1-s42/fold_2/seed_42/cross_encoder",
+                "sha256": "1f7936f8246f94473bcc763b9d4d6b57b715252a06f878d5bdd9a683db4a966f",
+                "files": 7,
+                "bytes": 91580119
+              }
+            },
+            "duration_seconds": 117.227
+          }
+        ]
+      }
+    ],
+    "dense": {
+      "evaluated_queries": {
+        "mean": 26.0,
+        "stddev": 0.0
+      },
+      "excluded_no_evidence_queries": {
+        "mean": 7.0,
+        "stddev": 0.0
+      },
+      "expected_clauses": {
+        "mean": 65.0,
+        "stddev": 0.0
+      },
+      "mrr": {
+        "mean": 0.794061,
+        "stddev": 0.0
+      },
+      "recall_at_1": {
+        "mean": 0.276923,
+        "stddev": 0.0
+      },
+      "complete_case_recall_at_1": {
+        "mean": 0.153846,
+        "stddev": 0.0
+      },
+      "hit_rate_at_1": {
+        "mean": 0.692308,
+        "stddev": 0.0
+      },
+      "ndcg_at_1": {
+        "mean": 0.692308,
+        "stddev": 0.0
+      },
+      "recall_at_3": {
+        "mean": 0.507692,
+        "stddev": 0.0
+      },
+      "complete_case_recall_at_3": {
+        "mean": 0.423077,
+        "stddev": 0.0
+      },
+      "hit_rate_at_3": {
+        "mean": 0.884615,
+        "stddev": 0.0
+      },
+      "ndcg_at_3": {
+        "mean": 0.652695,
+        "stddev": 0.0
+      },
+      "recall_at_6": {
+        "mean": 0.615385,
+        "stddev": 0.0
+      },
+      "complete_case_recall_at_6": {
+        "mean": 0.538462,
+        "stddev": 0.0
+      },
+      "hit_rate_at_6": {
+        "mean": 0.923077,
+        "stddev": 0.0
+      },
+      "ndcg_at_6": {
+        "mean": 0.669226,
+        "stddev": 0.0
+      },
+      "recall_at_10": {
+        "mean": 0.769231,
+        "stddev": 0.0
+      },
+      "complete_case_recall_at_10": {
+        "mean": 0.692308,
+        "stddev": 0.0
+      },
+      "hit_rate_at_10": {
+        "mean": 0.961538,
+        "stddev": 0.0
+      },
+      "ndcg_at_10": {
+        "mean": 0.725225,
+        "stddev": 0.0
+      },
+      "recall_at_24": {
+        "mean": 0.892308,
+        "stddev": 0.0
+      },
+      "complete_case_recall_at_24": {
+        "mean": 0.807692,
+        "stddev": 0.0
+      },
+      "hit_rate_at_24": {
+        "mean": 0.961538,
+        "stddev": 0.0
+      },
+      "ndcg_at_24": {
+        "mean": 0.751361,
+        "stddev": 0.0
+      }
+    },
+    "reranked": {
+      "evaluated_queries": {
+        "mean": 26.0,
+        "stddev": 0.0
+      },
+      "excluded_no_evidence_queries": {
+        "mean": 7.0,
+        "stddev": 0.0
+      },
+      "expected_clauses": {
+        "mean": 65.0,
+        "stddev": 0.0
+      },
+      "mrr": {
+        "mean": 0.836949,
+        "stddev": 0.0
+      },
+      "recall_at_1": {
+        "mean": 0.307692,
+        "stddev": 0.0
+      },
+      "complete_case_recall_at_1": {
+        "mean": 0.192308,
+        "stddev": 0.0
+      },
+      "hit_rate_at_1": {
+        "mean": 0.769231,
+        "stddev": 0.0
+      },
+      "ndcg_at_1": {
+        "mean": 0.769231,
+        "stddev": 0.0
+      },
+      "recall_at_3": {
+        "mean": 0.584615,
+        "stddev": 0.0
+      },
+      "complete_case_recall_at_3": {
+        "mean": 0.576923,
+        "stddev": 0.0
+      },
+      "hit_rate_at_3": {
+        "mean": 0.884615,
+        "stddev": 0.0
+      },
+      "ndcg_at_3": {
+        "mean": 0.741285,
+        "stddev": 0.0
+      },
+      "recall_at_6": {
+        "mean": 0.646154,
+        "stddev": 0.0
+      },
+      "complete_case_recall_at_6": {
+        "mean": 0.615385,
+        "stddev": 0.0
+      },
+      "hit_rate_at_6": {
+        "mean": 0.884615,
+        "stddev": 0.0
+      },
+      "ndcg_at_6": {
+        "mean": 0.730953,
+        "stddev": 0.0
+      },
+      "recall_at_10": {
+        "mean": 0.784615,
+        "stddev": 0.0
+      },
+      "complete_case_recall_at_10": {
+        "mean": 0.769231,
+        "stddev": 0.0
+      },
+      "hit_rate_at_10": {
+        "mean": 0.923077,
+        "stddev": 0.0
+      },
+      "ndcg_at_10": {
+        "mean": 0.784972,
+        "stddev": 0.0
+      },
+      "recall_at_24": {
+        "mean": 0.892308,
+        "stddev": 0.0
+      },
+      "complete_case_recall_at_24": {
+        "mean": 0.807692,
+        "stddev": 0.0
+      },
+      "hit_rate_at_24": {
+        "mean": 0.961538,
+        "stddev": 0.0
+      },
+      "ndcg_at_24": {
+        "mean": 0.807712,
+        "stddev": 0.0
+      }
+    },
+    "cross_encoder_binary": {
+      "examples": {
+        "mean": 164.0,
+        "stddev": 0.0
+      },
+      "positives": {
+        "mean": 65.0,
+        "stddev": 0.0
+      },
+      "negatives": {
+        "mean": 99.0,
+        "stddev": 0.0
+      },
+      "zero_logit_accuracy": {
+        "mean": 0.646341,
+        "stddev": 0.0
+      },
+      "roc_auc": {
+        "mean": 0.640715,
+        "stddev": 0.0
+      },
+      "mean_positive_logit": {
+        "mean": -1.239896,
+        "stddev": 0.0
+      },
+      "mean_negative_logit": {
+        "mean": -4.364938,
+        "stddev": 0.0
+      }
+    }
+  },
+  "final_candidate": {
+    "seed": 42,
+    "training_scope": "all reviewed queries; metrics below are in-sample regression only",
+    "bi_encoder_triplets": 195,
+    "cross_encoder_pairs": 164,
+    "dense_in_sample": {
+      "evaluated_queries": 26,
+      "excluded_no_evidence_queries": 7,
+      "expected_clauses": 65,
+      "mrr": 0.980769,
+      "recall_at_1": 0.384615,
+      "complete_case_recall_at_1": 0.269231,
+      "hit_rate_at_1": 0.961538,
+      "ndcg_at_1": 0.961538,
+      "recall_at_3": 0.753846,
+      "complete_case_recall_at_3": 0.692308,
+      "hit_rate_at_3": 1.0,
+      "ndcg_at_3": 0.941893,
+      "recall_at_6": 0.892308,
+      "complete_case_recall_at_6": 0.846154,
+      "hit_rate_at_6": 1.0,
+      "ndcg_at_6": 0.933732,
+      "recall_at_10": 0.923077,
+      "complete_case_recall_at_10": 0.846154,
+      "hit_rate_at_10": 1.0,
+      "ndcg_at_10": 0.941382,
+      "recall_at_24": 1.0,
+      "complete_case_recall_at_24": 1.0,
+      "hit_rate_at_24": 1.0,
+      "ndcg_at_24": 0.958745
+    },
+    "reranked_in_sample": {
+      "evaluated_queries": 26,
+      "excluded_no_evidence_queries": 7,
+      "expected_clauses": 65,
+      "mrr": 0.891293,
+      "recall_at_1": 0.338462,
+      "complete_case_recall_at_1": 0.230769,
+      "hit_rate_at_1": 0.846154,
+      "ndcg_at_1": 0.846154,
+      "recall_at_3": 0.6,
+      "complete_case_recall_at_3": 0.576923,
+      "hit_rate_at_3": 0.923077,
+      "ndcg_at_3": 0.775571,
+      "recall_at_6": 0.753846,
+      "complete_case_recall_at_6": 0.692308,
+      "hit_rate_at_6": 0.923077,
+      "ndcg_at_6": 0.798619,
+      "recall_at_10": 0.876923,
+      "complete_case_recall_at_10": 0.807692,
+      "hit_rate_at_10": 0.961538,
+      "ndcg_at_10": 0.84226,
+      "recall_at_24": 1.0,
+      "complete_case_recall_at_24": 1.0,
+      "hit_rate_at_24": 1.0,
+      "ndcg_at_24": 0.873656
+    },
+    "cross_encoder_binary_in_sample": {
+      "examples": 164,
+      "positives": 65,
+      "negatives": 99,
+      "zero_logit_accuracy": 0.719512,
+      "roc_auc": 0.727273,
+      "mean_positive_logit": 0.219728,
+      "mean_negative_logit": -4.235266
+    },
+    "artifacts": {
+      "bi_encoder": {
+        "path": "models/candidates/county-hsp-local-v1-s42/final/seed_42/bi_encoder",
+        "sha256": "dab7c97da24017214da05b106b1e6fc0ae0c40581df4d687729a8e578aac7ec8",
+        "files": 9,
+        "bytes": 91578405
+      },
+      "cross_encoder": {
+        "path": "models/candidates/county-hsp-local-v1-s42/final/seed_42/cross_encoder",
+        "sha256": "512c4a42a3f10bbd1d9ff460951d5417b76eaea92d2c1f9c9bb14ebb82163520",
+        "files": 7,
+        "bytes": 91580119
+      },
+      "index": {
+        "path": "data/trained-indexes/county-hsp-local-v1-s42",
+        "manifest": {
+          "schema_version": 3,
+          "index_type": "IndexFlatIP",
+          "metric": "cosine_via_normalized_inner_product",
+          "dimension": 384,
+          "chunks": 148,
+          "embedding_backend": "sentence-transformers",
+          "embedding_model": "D:\\brite systems\\grounded-answer\\models\\candidates\\county-hsp-local-v1-s42\\final\\seed_42\\bi_encoder",
+          "corpus_sha256": "e595d8d82c3c07c840ca1fefab95a22c6ca5d83e027c1c259953f24b33ec6b57",
+          "embedding_artifact_sha256": "dab7c97da24017214da05b106b1e6fc0ae0c40581df4d687729a8e578aac7ec8",
+          "index_sha256": "f26fa66e25340fbc6a24ea1f38bbb791411b8153af16e62b33153112f68c0732",
+          "metadata_sha256": "b69c7ca5f443e699382aeda813cad9cbc29167839dba47faf67d8725a6390072"
+        }
+      }
+    },
+    "corpus_report": {
+      "document_id": "calder-hsp-policy-manual",
+      "document_name": "policy-manual.md",
+      "document_version": "31 December 2025",
+      "source_sha256": "e595d8d82c3c07c840ca1fefab95a22c6ca5d83e027c1c259953f24b33ec6b57",
+      "source_bytes": 29302,
+      "source_lines": 608,
+      "pages": null,
+      "parts": 12,
+      "sections": 54,
+      "clauses": 148,
+      "chunks": 148,
+      "average_chunk_characters": 167.11,
+      "largest_chunk_characters": 500,
+      "duplicate_clause_groups": [
+        [
+          "3.2.3",
+          "5.2.3"
+        ]
+      ],
+      "unresolved_cross_references": [],
+      "parser": "markdown-clause-v2"
+    },
+    "duration_seconds": 191.476,
+    "end_to_end": {
+      "core": {
+        "passes": 18,
+        "failures": 0,
+        "metrics": {
+          "total": 18,
+          "passes": 18,
+          "failures": 0,
+          "strict_pass_rate": 1.0,
+          "decision": {
+            "correct": 18,
+            "total": 18,
+            "accuracy": 1.0,
+            "confusion_matrix": {
+              "ANSWER": {
+                "ANSWER": 11,
+                "CONFLICT": 0,
+                "REFUSE": 0,
+                "ERROR": 0
+              },
+              "CONFLICT": {
+                "ANSWER": 0,
+                "CONFLICT": 2,
+                "REFUSE": 0,
+                "ERROR": 0
+              },
+              "REFUSE": {
+                "ANSWER": 0,
+                "CONFLICT": 0,
+                "REFUSE": 5,
+                "ERROR": 0
+              }
+            }
+          },
+          "answer": {
+            "expected": 11,
+            "predicted": 11,
+            "decision_correct": 11,
+            "decision_precision": 1.0,
+            "decision_recall": 1.0,
+            "decision_f1": 1.0,
+            "strict_passes": 11,
+            "strict_pass_rate": 1.0
+          },
+          "refuse": {
+            "expected": 5,
+            "predicted": 5,
+            "decision_correct": 5,
+            "decision_precision": 1.0,
+            "decision_recall": 1.0,
+            "decision_f1": 1.0,
+            "strict_passes": 5,
+            "strict_pass_rate": 1.0
+          },
+          "conflict": {
+            "expected": 2,
+            "predicted": 2,
+            "decision_correct": 2,
+            "decision_precision": 1.0,
+            "decision_recall": 1.0,
+            "decision_f1": 1.0,
+            "strict_passes": 2,
+            "strict_pass_rate": 1.0
+          },
+          "retrieval": {
+            "case_passes": 18,
+            "cases": 18,
+            "case_recall": 1.0,
+            "clauses_found": 48,
+            "clauses_expected": 48,
+            "micro_clause_recall": 1.0
+          },
+          "citation": {
+            "case_passes": 13,
+            "cases": 13,
+            "case_recall": 1.0,
+            "clauses_cited": 27,
+            "clauses_expected": 27,
+            "micro_clause_recall": 1.0,
+            "integrity_passes": 18,
+            "integrity_rate": 1.0
+          },
+          "facts": {
+            "case_passes": 13,
+            "cases": 13,
+            "case_recall": 1.0,
+            "facts_found": 53,
+            "facts_expected": 53,
+            "micro_fact_recall": 1.0
+          },
+          "unsupported": {
+            "safe_cases": 18,
+            "total": 18,
+            "safety_rate": 1.0,
+            "grounded_cases": 18,
+            "grounding_rate": 1.0,
+            "forbidden_claim_clean_cases": 18,
+            "forbidden_claim_clean_rate": 1.0,
+            "false_answers": 0,
+            "non_answer_cases": 7,
+            "false_answer_rate": 0.0
+          },
+          "failure_taxonomy": {},
+          "latency_ms": {
+            "mean": 612.378,
+            "p50": 593.843,
+            "p95": 770.457,
+            "max": 770.457
+          }
+        }
+      },
+      "adversarial": {
+        "passes": 15,
+        "failures": 0,
+        "metrics": {
+          "total": 15,
+          "passes": 15,
+          "failures": 0,
+          "strict_pass_rate": 1.0,
+          "decision": {
+            "correct": 15,
+            "total": 15,
+            "accuracy": 1.0,
+            "confusion_matrix": {
+              "ANSWER": {
+                "ANSWER": 5,
+                "CONFLICT": 0,
+                "REFUSE": 0,
+                "ERROR": 0
+              },
+              "CONFLICT": {
+                "ANSWER": 0,
+                "CONFLICT": 1,
+                "REFUSE": 0,
+                "ERROR": 0
+              },
+              "REFUSE": {
+                "ANSWER": 0,
+                "CONFLICT": 0,
+                "REFUSE": 9,
+                "ERROR": 0
+              }
+            }
+          },
+          "answer": {
+            "expected": 5,
+            "predicted": 5,
+            "decision_correct": 5,
+            "decision_precision": 1.0,
+            "decision_recall": 1.0,
+            "decision_f1": 1.0,
+            "strict_passes": 5,
+            "strict_pass_rate": 1.0
+          },
+          "refuse": {
+            "expected": 9,
+            "predicted": 9,
+            "decision_correct": 9,
+            "decision_precision": 1.0,
+            "decision_recall": 1.0,
+            "decision_f1": 1.0,
+            "strict_passes": 9,
+            "strict_pass_rate": 1.0
+          },
+          "conflict": {
+            "expected": 1,
+            "predicted": 1,
+            "decision_correct": 1,
+            "decision_precision": 1.0,
+            "decision_recall": 1.0,
+            "decision_f1": 1.0,
+            "strict_passes": 1,
+            "strict_pass_rate": 1.0
+          },
+          "retrieval": {
+            "case_passes": 8,
+            "cases": 8,
+            "case_recall": 1.0,
+            "clauses_found": 17,
+            "clauses_expected": 17,
+            "micro_clause_recall": 1.0
+          },
+          "citation": {
+            "case_passes": 6,
+            "cases": 6,
+            "case_recall": 1.0,
+            "clauses_cited": 7,
+            "clauses_expected": 7,
+            "micro_clause_recall": 1.0,
+            "integrity_passes": 15,
+            "integrity_rate": 1.0
+          },
+          "facts": {
+            "case_passes": 6,
+            "cases": 6,
+            "case_recall": 1.0,
+            "facts_found": 14,
+            "facts_expected": 14,
+            "micro_fact_recall": 1.0
+          },
+          "unsupported": {
+            "safe_cases": 15,
+            "total": 15,
+            "safety_rate": 1.0,
+            "grounded_cases": 15,
+            "grounding_rate": 1.0,
+            "forbidden_claim_clean_cases": 15,
+            "forbidden_claim_clean_rate": 1.0,
+            "false_answers": 0,
+            "non_answer_cases": 10,
+            "false_answer_rate": 0.0
+          },
+          "failure_taxonomy": {},
+          "latency_ms": {
+            "mean": 539.836,
+            "p50": 543.347,
+            "p95": 777.456,
+            "max": 777.456
+          }
+        }
+      }
+    }
+  },
+  "duration_seconds": 419.881,
+  "completed_at_utc": "2026-08-23T04:15:31.612206+00:00"
+}

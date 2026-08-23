@@ -16,7 +16,9 @@ def ranking_metrics(
     """Compute micro recall, full-case recall, MRR, and nDCG."""
 
     relevant_cases = [case for case in cases if case["expected_evidence_clause_ids"]]
-    total_relevant = sum(len(set(case["expected_evidence_clause_ids"])) for case in relevant_cases)
+    total_relevant = sum(
+        len(set(case["expected_evidence_clause_ids"])) for case in relevant_cases
+    )
     results: dict[str, Any] = {
         "evaluated_queries": len(relevant_cases),
         "excluded_no_evidence_queries": len(cases) - len(relevant_cases),
@@ -29,7 +31,9 @@ def ranking_metrics(
         gold = set(case["expected_evidence_clause_ids"])
         ranked = rankings[str(case["id"])]
         rank_by_id = {clause_id: index + 1 for index, clause_id in enumerate(ranked)}
-        observed = sorted(rank_by_id[clause_id] for clause_id in gold if clause_id in rank_by_id)
+        observed = sorted(
+            rank_by_id[clause_id] for clause_id in gold if clause_id in rank_by_id
+        )
         reciprocal_ranks.append(1.0 / observed[0] if observed else 0.0)
         for cutoff in cutoffs:
             dcg = sum(
@@ -53,22 +57,35 @@ def ranking_metrics(
             found += overlap
             complete += int(overlap == len(gold))
             hit += int(overlap > 0)
-        results[f"recall_at_{cutoff}"] = found / total_relevant if total_relevant else 1.0
+        results[f"recall_at_{cutoff}"] = (
+            found / total_relevant if total_relevant else 1.0
+        )
         results[f"complete_case_recall_at_{cutoff}"] = (
             complete / len(relevant_cases) if relevant_cases else 1.0
         )
-        results[f"hit_rate_at_{cutoff}"] = hit / len(relevant_cases) if relevant_cases else 1.0
+        results[f"hit_rate_at_{cutoff}"] = (
+            hit / len(relevant_cases) if relevant_cases else 1.0
+        )
         results[f"ndcg_at_{cutoff}"] = _mean(ndcg_values[cutoff])
-    return {key: round(value, 6) if isinstance(value, float) else value for key, value in results.items()}
+    return {
+        key: round(value, 6) if isinstance(value, float) else value
+        for key, value in results.items()
+    }
 
 
-def binary_metrics(labels: Sequence[float], logits: Sequence[float]) -> dict[str, float | int]:
+def binary_metrics(
+    labels: Sequence[float], logits: Sequence[float]
+) -> dict[str, float | int]:
     """Evaluate raw cross-encoder logits without fitting a test threshold."""
 
     if len(labels) != len(logits) or not labels:
         raise ValueError("Binary labels and logits must be non-empty and equally sized")
-    positives = [score for label, score in zip(labels, logits, strict=True) if label >= 0.5]
-    negatives = [score for label, score in zip(labels, logits, strict=True) if label < 0.5]
+    positives = [
+        score for label, score in zip(labels, logits, strict=True) if label >= 0.5
+    ]
+    negatives = [
+        score for label, score in zip(labels, logits, strict=True) if label < 0.5
+    ]
     correct = sum(
         (score >= 0.0) == (label >= 0.5)
         for label, score in zip(labels, logits, strict=True)
@@ -78,7 +95,9 @@ def binary_metrics(labels: Sequence[float], logits: Sequence[float]) -> dict[str
     for positive in positives:
         for negative in negatives:
             comparisons += 1
-            wins += 1.0 if positive > negative else (0.5 if positive == negative else 0.0)
+            wins += (
+                1.0 if positive > negative else (0.5 if positive == negative else 0.0)
+            )
     return {
         "examples": len(labels),
         "positives": len(positives),
@@ -92,4 +111,3 @@ def binary_metrics(labels: Sequence[float], logits: Sequence[float]) -> dict[str
 
 def _mean(values: Sequence[float]) -> float:
     return sum(values) / len(values) if values else 0.0
-

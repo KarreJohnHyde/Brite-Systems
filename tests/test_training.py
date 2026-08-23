@@ -17,11 +17,7 @@ from training.metrics import binary_metrics, ranking_metrics
 
 
 def _expected_ids(cases: list[dict], field: str) -> set[str]:
-    return {
-        clause_id
-        for case in cases
-        for clause_id in case[field]
-    }
+    return {clause_id for case in cases for clause_id in case[field]}
 
 
 def test_reviewed_folds_cover_every_case_once_without_clause_leakage(
@@ -59,12 +55,12 @@ def test_reviewed_folds_cover_every_case_once_without_clause_leakage(
     }
 
     for fold in folds.values():
-        assert _expected_ids(
-            fold["train"], "expected_evidence_clause_ids"
-        ).isdisjoint(_expected_ids(fold["test"], "expected_evidence_clause_ids"))
-        assert _expected_ids(
-            fold["train"], "expected_clause_ids"
-        ).isdisjoint(_expected_ids(fold["test"], "expected_clause_ids"))
+        assert _expected_ids(fold["train"], "expected_evidence_clause_ids").isdisjoint(
+            _expected_ids(fold["test"], "expected_evidence_clause_ids")
+        )
+        assert _expected_ids(fold["train"], "expected_clause_ids").isdisjoint(
+            _expected_ids(fold["test"], "expected_clause_ids")
+        )
 
 
 def test_guarded_negatives_exclude_gold_section_neighbors_and_cross_references(
@@ -179,7 +175,9 @@ def test_training_rows_never_duplicate_or_flip_pair_labels(make_chunk) -> None:
         )
 
 
-def test_no_evidence_case_builds_only_negative_pairs_and_no_triplets(make_chunk) -> None:
+def test_no_evidence_case_builds_only_negative_pairs_and_no_triplets(
+    make_chunk,
+) -> None:
     negative_1 = make_chunk(
         chunk_id="chunk_negative_1",
         clause_id="2.1.1",
