@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "run_type": "strict_end_to_end",
-  "generated_at_utc": "2026-08-23T11:04:03.857851+00:00",
+  "generated_at_utc": "2026-08-23T11:13:26.842926+00:00",
   "questions_path": "D:\\brite systems\\grounded-answer\\evaluation\\questions.json",
   "corpus_path": "D:\\brite systems\\grounded-answer\\data\\policy-manual.md",
   "corpus_sha256": "225267869bb2b02536fe59f4d73c53106305460127bdf0f15fd4a5bce796cbca",
@@ -20,7 +20,7 @@
     "refusal_threshold": 0.58,
     "direct_coverage_threshold": 0.34
   },
-  "duration_seconds": 0.364,
+  "duration_seconds": 0.532,
   "passes": 18,
   "failures": 0,
   "metrics": {
@@ -131,10 +131,10 @@
     },
     "failure_taxonomy": {},
     "latency_ms": {
-      "mean": 11.239,
-      "p50": 10.625,
-      "p95": 18.146,
-      "max": 18.146
+      "mean": 11.46,
+      "p50": 9.966,
+      "p95": 19.005,
+      "max": 19.005
     }
   },
   "cases": [
@@ -211,7 +211,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 14.788,
+      "elapsed_ms": 13.189,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -786,7 +786,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 16.326,
+      "elapsed_ms": 16.418,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -1121,8 +1121,8 @@
                 "cross_references": []
               },
               "vector_score": 0.26269328594207764,
-              "lexical_score": 0.6688116127552199,
-              "fused_score": 0.7271187023562115,
+              "lexical_score": 0.6688116127552198,
+              "fused_score": 0.7271187023562113,
               "reranker_score": null,
               "vector_rank": 1,
               "lexical_rank": 3,
@@ -1168,7 +1168,7 @@
               },
               "vector_score": null,
               "lexical_score": null,
-              "fused_score": 0.6689492061677146,
+              "fused_score": 0.6689492061677145,
               "reranker_score": null,
               "vector_rank": null,
               "lexical_rank": null,
@@ -1214,7 +1214,7 @@
               },
               "vector_score": null,
               "lexical_score": 0.6272852459134725,
-              "fused_score": 0.6689492061677146,
+              "fused_score": 0.6689492061677145,
               "reranker_score": null,
               "vector_rank": null,
               "lexical_rank": 4,
@@ -1307,8 +1307,8 @@
                 "cross_references": []
               },
               "vector_score": null,
-              "lexical_score": 0.5554607270131046,
-              "fused_score": 0.5739004435268287,
+              "lexical_score": 0.5554607270131044,
+              "fused_score": 0.5739004435268286,
               "reranker_score": null,
               "vector_rank": null,
               "lexical_rank": 7,
@@ -1613,7 +1613,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 9.018,
+      "elapsed_ms": 9.966,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -2104,7 +2104,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 9.496,
+      "elapsed_ms": 9.695,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -2737,7 +2737,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 7.335,
+      "elapsed_ms": 7.474,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -3150,7 +3150,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 5.772,
+      "elapsed_ms": 5.829,
       "error": null,
       "response": {
         "decision": "REFUSE",
@@ -3845,7 +3845,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 6.568,
+      "elapsed_ms": 7.655,
       "error": null,
       "response": {
         "decision": "REFUSE",
@@ -4421,7 +4421,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 6.546,
+      "elapsed_ms": 6.455,
       "error": null,
       "response": {
         "decision": "CONFLICT",
@@ -4868,7 +4868,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 16.629,
+      "elapsed_ms": 15.689,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -5716,7 +5716,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 12.655,
+      "elapsed_ms": 13.679,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -5851,7 +5851,7 @@
                 "cross_references": []
               },
               "vector_score": 0.20079484581947327,
-              "lexical_score": 0.54133656595708,
+              "lexical_score": 0.5413365659570798,
               "fused_score": 0.92,
               "reranker_score": null,
               "vector_rank": 7,
@@ -5897,7 +5897,7 @@
                 "cross_references": []
               },
               "vector_score": 0.19433356821537018,
-              "lexical_score": 0.7110770361903178,
+              "lexical_score": 0.7110770361903176,
               "fused_score": 0.92,
               "reranker_score": null,
               "vector_rank": 8,
@@ -5991,7 +5991,7 @@
                 ]
               },
               "vector_score": null,
-              "lexical_score": 0.6058013945944358,
+              "lexical_score": 0.6058013945944357,
               "fused_score": 0.590037082979171,
               "reranker_score": null,
               "vector_rank": null,
@@ -6037,7 +6037,7 @@
                 "cross_references": []
               },
               "vector_score": 0.2334514558315277,
-              "lexical_score": 0.4968406575203361,
+              "lexical_score": 0.49684065752033607,
               "fused_score": 0.5779346996597658,
               "reranker_score": null,
               "vector_rank": 2,
@@ -6272,7 +6272,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 12.659,
+      "elapsed_ms": 14.98,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -6455,7 +6455,7 @@
                 "cross_references": []
               },
               "vector_score": null,
-              "lexical_score": 0.213936604984719,
+              "lexical_score": 0.21393660498471898,
               "fused_score": 0.92,
               "reranker_score": null,
               "vector_rank": null,
@@ -6643,8 +6643,8 @@
                 ]
               },
               "vector_score": null,
-              "lexical_score": 0.8101939994941566,
-              "fused_score": 0.7100790886073496,
+              "lexical_score": 0.8101939994941565,
+              "fused_score": 0.7100790886073495,
               "reranker_score": null,
               "vector_rank": null,
               "lexical_rank": 2,
@@ -6690,7 +6690,7 @@
               },
               "vector_score": null,
               "lexical_score": null,
-              "fused_score": 0.6532727615187617,
+              "fused_score": 0.6532727615187616,
               "reranker_score": null,
               "vector_rank": null,
               "lexical_rank": null,
@@ -6781,8 +6781,8 @@
                 "cross_references": []
               },
               "vector_score": 0.24041810631752014,
-              "lexical_score": 0.26696793183572753,
-              "fused_score": 0.30259157667046643,
+              "lexical_score": 0.2669679318357275,
+              "fused_score": 0.3025915766704664,
               "reranker_score": null,
               "vector_rank": 10,
               "lexical_rank": 5,
@@ -6829,7 +6829,7 @@
                 ]
               },
               "vector_score": null,
-              "lexical_score": 0.22179132649778402,
+              "lexical_score": 0.221791326497784,
               "fused_score": 0.2932164789640209,
               "reranker_score": null,
               "vector_rank": null,
@@ -7159,7 +7159,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 10.119,
+      "elapsed_ms": 9.334,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -7967,7 +7967,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 18.146,
+      "elapsed_ms": 19.005,
       "error": null,
       "response": {
         "decision": "REFUSE",
@@ -8254,7 +8254,7 @@
                 "cross_references": []
               },
               "vector_score": null,
-              "lexical_score": 0.6736454600492632,
+              "lexical_score": 0.6736454600492633,
               "fused_score": 0.92,
               "reranker_score": null,
               "vector_rank": null,
@@ -8447,7 +8447,7 @@
                 "cross_references": []
               },
               "vector_score": null,
-              "lexical_score": 0.8309720003718111,
+              "lexical_score": 0.8309720003718108,
               "fused_score": 0.8464,
               "reranker_score": null,
               "vector_rank": null,
@@ -8544,7 +8544,7 @@
                 ]
               },
               "vector_score": null,
-              "lexical_score": 0.5656910391839249,
+              "lexical_score": 0.5656910391839248,
               "fused_score": 0.8464,
               "reranker_score": null,
               "vector_rank": null,
@@ -8641,7 +8641,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 10.501,
+      "elapsed_ms": 8.585,
       "error": null,
       "response": {
         "decision": "REFUSE",
@@ -9211,7 +9211,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 10.743,
+      "elapsed_ms": 11.481,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -9327,7 +9327,7 @@
                 "cross_references": []
               },
               "vector_score": 0.295257568359375,
-              "lexical_score": 0.6790611042756908,
+              "lexical_score": 0.6790611042756909,
               "fused_score": 0.92,
               "reranker_score": null,
               "vector_rank": 2,
@@ -9375,8 +9375,8 @@
                 ]
               },
               "vector_score": 0.27795708179473877,
-              "lexical_score": 0.9507538653405999,
-              "fused_score": 0.8849927031454549,
+              "lexical_score": 0.9507538653406001,
+              "fused_score": 0.884992703145455,
               "reranker_score": null,
               "vector_rank": 3,
               "lexical_rank": 2,
@@ -9422,7 +9422,7 @@
               },
               "vector_score": null,
               "lexical_score": null,
-              "fused_score": 0.8141932868938185,
+              "fused_score": 0.8141932868938186,
               "reranker_score": null,
               "vector_rank": null,
               "lexical_rank": null,
@@ -9471,7 +9471,7 @@
               },
               "vector_score": null,
               "lexical_score": null,
-              "fused_score": 0.8141932868938185,
+              "fused_score": 0.8141932868938186,
               "reranker_score": null,
               "vector_rank": null,
               "lexical_rank": null,
@@ -9516,8 +9516,8 @@
                 "cross_references": []
               },
               "vector_score": 0.3141939043998718,
-              "lexical_score": 0.675089346364266,
-              "fused_score": 0.7370881913859706,
+              "lexical_score": 0.6750893463642661,
+              "fused_score": 0.7370881913859707,
               "reranker_score": null,
               "vector_rank": 1,
               "lexical_rank": 4,
@@ -9562,8 +9562,8 @@
                 "cross_references": []
               },
               "vector_score": null,
-              "lexical_score": 0.613637224649914,
-              "fused_score": 0.5436091148597739,
+              "lexical_score": 0.6136372246499141,
+              "fused_score": 0.543609114859774,
               "reranker_score": null,
               "vector_rank": null,
               "lexical_rank": 5,
@@ -9608,8 +9608,8 @@
                 "cross_references": []
               },
               "vector_score": 0.2285020500421524,
-              "lexical_score": 0.5046468113873549,
-              "fused_score": 0.5009787241112965,
+              "lexical_score": 0.504646811387355,
+              "fused_score": 0.5009787241112966,
               "reranker_score": null,
               "vector_rank": 7,
               "lexical_rank": 8,
@@ -9857,7 +9857,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 10.641,
+      "elapsed_ms": 13.916,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -9975,7 +9975,7 @@
                 ]
               },
               "vector_score": 0.28393688797950745,
-              "lexical_score": 0.17745848121996077,
+              "lexical_score": 0.1774584812199608,
               "fused_score": 0.92,
               "reranker_score": null,
               "vector_rank": 9,
@@ -10021,7 +10021,7 @@
                 "cross_references": []
               },
               "vector_score": 0.3982703387737274,
-              "lexical_score": 0.4499402457137076,
+              "lexical_score": 0.44994024571370766,
               "fused_score": 0.5568090983414032,
               "reranker_score": null,
               "vector_rank": 2,
@@ -10067,7 +10067,7 @@
                 "cross_references": []
               },
               "vector_score": 0.312097430229187,
-              "lexical_score": 0.2599012348935006,
+              "lexical_score": 0.25990123489350064,
               "fused_score": 0.512264370474091,
               "reranker_score": null,
               "vector_rank": 4,
@@ -10115,7 +10115,7 @@
                 ]
               },
               "vector_score": 0.25033634901046753,
-              "lexical_score": 0.20366293459699306,
+              "lexical_score": 0.20366293459699308,
               "fused_score": 0.512264370474091,
               "reranker_score": null,
               "vector_rank": 12,
@@ -10161,7 +10161,7 @@
                 "cross_references": []
               },
               "vector_score": 0.2460668981075287,
-              "lexical_score": 0.40792812280068785,
+              "lexical_score": 0.4079281228006879,
               "fused_score": 0.5010436617406794,
               "reranker_score": null,
               "vector_rank": 14,
@@ -10207,7 +10207,7 @@
                 "cross_references": []
               },
               "vector_score": null,
-              "lexical_score": 0.2113111558866877,
+              "lexical_score": 0.21131115588668772,
               "fused_score": 0.46096016880142504,
               "reranker_score": null,
               "vector_rank": null,
@@ -10253,7 +10253,7 @@
                 "cross_references": []
               },
               "vector_score": 0.298631876707077,
-              "lexical_score": 0.2655167773473601,
+              "lexical_score": 0.2655167773473602,
               "fused_score": 0.3887783995236091,
               "reranker_score": null,
               "vector_rank": 5,
@@ -10299,7 +10299,7 @@
                 "cross_references": []
               },
               "vector_score": 0.29773426055908203,
-              "lexical_score": 0.19935907524213758,
+              "lexical_score": 0.1993590752421376,
               "fused_score": 0.3576761275617204,
               "reranker_score": null,
               "vector_rank": 6,
@@ -10347,8 +10347,8 @@
                 ]
               },
               "vector_score": null,
-              "lexical_score": 0.2842034143305053,
-              "fused_score": 0.3468847141914706,
+              "lexical_score": 0.28420341433050533,
+              "fused_score": 0.34688471419147066,
               "reranker_score": null,
               "vector_rank": null,
               "lexical_rank": 5,
@@ -10684,7 +10684,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 13.727,
+      "elapsed_ms": 13.713,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -10775,7 +10775,7 @@
                 ]
               },
               "vector_score": 0.3748316764831543,
-              "lexical_score": 0.9965088692597531,
+              "lexical_score": 0.9965088692597533,
               "fused_score": 1.0,
               "reranker_score": null,
               "vector_rank": 1,
@@ -11525,7 +11525,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 10.625,
+      "elapsed_ms": 9.217,
       "error": null,
       "response": {
         "decision": "REFUSE",
@@ -11679,7 +11679,7 @@
                 "cross_references": []
               },
               "vector_score": 0.17452344298362732,
-              "lexical_score": 0.6118486496451764,
+              "lexical_score": 0.6118486496451765,
               "fused_score": 0.92,
               "reranker_score": null,
               "vector_rank": 9,
@@ -11776,7 +11776,7 @@
                 ]
               },
               "vector_score": null,
-              "lexical_score": 0.28715628749854233,
+              "lexical_score": 0.2871562874985424,
               "fused_score": 0.92,
               "reranker_score": null,
               "vector_rank": null,
@@ -11823,7 +11823,7 @@
               },
               "vector_score": null,
               "lexical_score": null,
-              "fused_score": 0.5404476319099634,
+              "fused_score": 0.5404476319099635,
               "reranker_score": null,
               "vector_rank": null,
               "lexical_rank": null,
@@ -11871,7 +11871,7 @@
               },
               "vector_score": null,
               "lexical_score": null,
-              "fused_score": 0.5404476319099634,
+              "fused_score": 0.5404476319099635,
               "reranker_score": null,
               "vector_rank": null,
               "lexical_rank": null,
@@ -11916,8 +11916,8 @@
                 "cross_references": []
               },
               "vector_score": 0.18015825748443604,
-              "lexical_score": 0.40233438169295777,
-              "fused_score": 0.41188388920634905,
+              "lexical_score": 0.4023343816929578,
+              "fused_score": 0.4118838892063491,
               "reranker_score": null,
               "vector_rank": 7,
               "lexical_rank": 4,
@@ -11962,7 +11962,7 @@
                 "cross_references": []
               },
               "vector_score": null,
-              "lexical_score": 0.3855394965662296,
+              "lexical_score": 0.3855394965662297,
               "fused_score": 0.37893317806984117,
               "reranker_score": null,
               "vector_rank": null,
@@ -12008,7 +12008,7 @@
                 "cross_references": []
               },
               "vector_score": null,
-              "lexical_score": 0.34061324793534453,
+              "lexical_score": 0.3406132479353446,
               "fused_score": 0.37893317806984117,
               "reranker_score": null,
               "vector_rank": null,
@@ -12056,8 +12056,8 @@
                 ]
               },
               "vector_score": null,
-              "lexical_score": 0.4130272905349493,
-              "fused_score": 0.37599054309697644,
+              "lexical_score": 0.41302729053494935,
+              "fused_score": 0.3759905430969765,
               "reranker_score": null,
               "vector_rank": null,
               "lexical_rank": 3,

@@ -1,6 +1,6 @@
 # Evaluation Results — The Grounded Answer
 
-**Generated (UTC):** 2026-08-23T11:04:05.112489+00:00
+**Generated (UTC):** 2026-08-23T11:13:29.918896+00:00
 **Run type:** `strict_end_to_end`
 **Corpus SHA-256:** `225267869bb2b02536fe59f4d73c53106305460127bdf0f15fd4a5bce796cbca`
 **Embedding backend:** `hashing`

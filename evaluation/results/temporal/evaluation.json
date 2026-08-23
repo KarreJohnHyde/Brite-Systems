@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "run_type": "strict_end_to_end",
-  "generated_at_utc": "2026-08-23T11:04:05.112489+00:00",
+  "generated_at_utc": "2026-08-23T11:13:29.918896+00:00",
   "questions_path": "D:\\brite systems\\grounded-answer\\evaluation\\temporal_questions.json",
   "corpus_path": "D:\\brite systems\\grounded-answer\\data\\policy-manual.md",
   "corpus_sha256": "225267869bb2b02536fe59f4d73c53106305460127bdf0f15fd4a5bce796cbca",
@@ -20,7 +20,7 @@
     "refusal_threshold": 0.58,
     "direct_coverage_threshold": 0.34
   },
-  "duration_seconds": 0.319,
+  "duration_seconds": 0.309,
   "passes": 17,
   "failures": 0,
   "metrics": {
@@ -131,10 +131,10 @@
     },
     "failure_taxonomy": {},
     "latency_ms": {
-      "mean": 9.623,
-      "p50": 9.777,
-      "p95": 18.04,
-      "max": 18.04
+      "mean": 6.732,
+      "p50": 7.136,
+      "p95": 10.798,
+      "max": 10.798
     }
   },
   "cases": [
@@ -226,7 +226,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 6.873,
+      "elapsed_ms": 9.373,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -723,7 +723,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 6.962,
+      "elapsed_ms": 7.144,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -1205,7 +1205,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 2.812,
+      "elapsed_ms": 3.489,
       "error": null,
       "response": {
         "decision": "REFUSE",
@@ -1698,7 +1698,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 4.12,
+      "elapsed_ms": 5.208,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -2111,7 +2111,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 9.777,
+      "elapsed_ms": 8.51,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -2520,7 +2520,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 3.332,
+      "elapsed_ms": 3.669,
       "error": null,
       "response": {
         "decision": "REFUSE",
@@ -3095,7 +3095,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 11.472,
+      "elapsed_ms": 7.935,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -3585,7 +3585,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 7.594,
+      "elapsed_ms": 7.136,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -4071,7 +4071,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 11.212,
+      "elapsed_ms": 4.794,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -4482,7 +4482,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 7.263,
+      "elapsed_ms": 7.667,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -4897,7 +4897,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 14.404,
+      "elapsed_ms": 6.278,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -5381,7 +5381,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 18.04,
+      "elapsed_ms": 8.586,
       "error": null,
       "response": {
         "decision": "REFUSE",
@@ -5860,7 +5860,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 12.672,
+      "elapsed_ms": 6.04,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -6119,7 +6119,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 11.406,
+      "elapsed_ms": 4.496,
       "error": null,
       "response": {
         "decision": "REFUSE",
@@ -6693,7 +6693,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 6.7,
+      "elapsed_ms": 7.974,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -7107,7 +7107,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 12.565,
+      "elapsed_ms": 5.341,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -7525,7 +7525,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 16.383,
+      "elapsed_ms": 10.798,
       "error": null,
       "response": {
         "decision": "CONFLICT",
