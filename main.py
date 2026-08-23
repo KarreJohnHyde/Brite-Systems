@@ -144,6 +144,7 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
         quiet=args.quiet,
         questions_path=args.questions,
         output_dir=args.output_dir,
+        respect_reranking=args.respect_reranking,
     )
     return 0 if report["failures"] == 0 else 1
 
@@ -236,6 +237,11 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--questions", type=Path, help="Optional labeled question-set JSON")
     evaluate.add_argument("--output-dir", type=Path, help="Directory for JSON and Markdown results")
     evaluate.add_argument("--embedding-backend", choices=("hashing", "sentence-transformers"))
+    evaluate.add_argument(
+        "--respect-reranking",
+        action="store_true",
+        help="Use configured reranking instead of the default reranker-off evaluation",
+    )
     evaluate.set_defaults(func=cmd_evaluate)
 
     calibrate = commands.add_parser("calibrate", help="Sweep support thresholds over the evaluation set")

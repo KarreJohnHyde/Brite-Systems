@@ -43,16 +43,20 @@ def run_evaluation(
     quiet: bool = False,
     questions_path: str | Path | None = None,
     output_dir: str | Path | None = None,
+    respect_reranking: bool = False,
 ) -> dict[str, Any]:
-    """Run the current question set through complete, deterministic responses."""
+    """Run complete deterministic responses, optionally using the runtime reranker."""
 
     configured = settings or Settings.from_env()
-    deterministic = configured.model_copy(
-        update={
-            "llm_provider": "deterministic",
-            "enable_reranking": False,
-        }
-    )
+    evaluation_overrides: dict[str, object] = {"llm_provider": "deterministic"}
+    if not respect_reranking:
+        evaluation_overrides.update(
+            {
+                "enable_reranking": False,
+                "require_reranker": False,
+            }
+        )
+    deterministic = configured.model_copy(update=evaluation_overrides)
     source = Path(questions_path) if questions_path else DEFAULT_QUESTIONS_PATH
     target_dir = Path(output_dir) if output_dir else DEFAULT_RESULTS_DIR
     questions = load_questions(source)
@@ -93,7 +97,12 @@ def run_evaluation(
             "embedding_backend": deterministic.embedding_backend,
             "embedding_model": pipeline.embedding_engine.model_name,
             "hybrid_search": deterministic.enable_hybrid_search,
-            "reranking": False,
+            "reranking": deterministic.enable_reranking,
+            "reranker_required": deterministic.require_reranker,
+            "reranker_model": (
+                deterministic.reranker_model if deterministic.enable_reranking else None
+            ),
+            "reranker_loaded": pipeline.retriever.reranker is not None,
             "neighbor_retrieval": deterministic.enable_neighbor_retrieval,
             "llm_provider": "deterministic",
             "initial_retrieval_k": deterministic.initial_retrieval_k,
@@ -214,6 +223,10 @@ def _requirement_statuses(report: dict[str, Any]) -> dict[str, list[dict[str, An
 
 def _markdown_report(report: dict[str, Any]) -> str:
     metrics = report["metrics"]
+    reranking = report["configuration"]["reranking"]
+    reranking_description = "enabled" if reranking else "disabled"
+    if reranking and report["configuration"].get("reranker_required"):
+        reranking_description += " (required)"
     lines = [
         "# Evaluation Results — The Grounded Answer",
         "",
@@ -221,6 +234,7 @@ def _markdown_report(report: dict[str, Any]) -> str:
         f"**Run type:** `{report['run_type']}`",
         f"**Corpus SHA-256:** `{report.get('corpus_sha256') or 'unavailable'}`",
         f"**Embedding backend:** `{report['configuration']['embedding_backend']}`",
+        f"**Reranking:** {reranking_description}",
         "**LLM/provider:** deterministic; no generation API used",
         "",
         "## Aggregate metrics",
@@ -330,7 +344,9 @@ def _markdown_report(report: dict[str, Any]) -> str:
         [
             "## Method",
             "",
-            "Every case exercised `GroundedAnswerPipeline.ask(..., include_trace=True)` with deterministic answer construction and reranking disabled. A case passes only when all recorded checks pass; retrieval-only success is insufficient.",
+            "Every case exercised `GroundedAnswerPipeline.ask(..., include_trace=True)` "
+            f"with deterministic answer construction and reranking {reranking_description}. "
+            "A case passes only when all recorded checks pass; retrieval-only success is insufficient.",
             "",
         ]
     )

@@ -58,6 +58,9 @@ def test_cli_parser_exposes_required_commands() -> None:
     assert custom_evaluation.questions == Path("evaluation/adversarial_questions.json")
     assert custom_evaluation.output_dir == Path("out")
 
+    reranked_evaluation = parser.parse_args(["evaluate", "--respect-reranking"])
+    assert reranked_evaluation.respect_reranking is True
+
 
 def test_cli_corpus_report_is_valid_json(corpus_path: Path, capsys) -> None:
     exit_code = cli.main(["corpus-report", "--corpus", str(corpus_path)])

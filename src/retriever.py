@@ -26,6 +26,12 @@ LIST_QUESTION_RE = re.compile(
     r"\b(which|what (?:are|is|income|resources?|conditions?|evidence|ways?|documents?|types?|kinds?))\b",
     re.IGNORECASE,
 )
+
+
+class RerankerUnavailableError(RuntimeError):
+    """Raised when a configured fail-closed reranker cannot be used."""
+
+
 class Retriever:
     """Combine dense and BM25 retrieval while preserving independent scores."""
 
@@ -36,6 +42,7 @@ class Retriever:
         *,
         use_hybrid: bool = True,
         use_reranker: bool = False,
+        require_reranker: bool = False,
         use_neighbors: bool = True,
         initial_k: int = 18,
         rerank_k: int = 8,
@@ -48,6 +55,7 @@ class Retriever:
         self.vector_store = vector_store
         self.use_hybrid = use_hybrid
         self.use_reranker = use_reranker
+        self.require_reranker = require_reranker
         self.use_neighbors = use_neighbors
         self.initial_k = initial_k
         self.rerank_k = rerank_k
@@ -63,6 +71,8 @@ class Retriever:
         for chunk in vector_store.chunks:
             if chunk.section_id:
                 self._by_section.setdefault(chunk.section_id, []).append(chunk)
+        if require_reranker and not use_reranker:
+            raise ValueError("require_reranker=True requires use_reranker=True")
         if use_reranker:
             self._load_reranker()
 
@@ -74,6 +84,10 @@ class Retriever:
         except Exception as exc:
             self.reranker_error = str(exc)
             self.reranker = None
+            if self.require_reranker:
+                raise RerankerUnavailableError(
+                    f"Required reranker {self.reranker_model!r} could not be loaded"
+                ) from exc
 
     @staticmethod
     def _load_findings(path: str | Path | None) -> dict[str, Any]:
@@ -244,14 +258,25 @@ class Retriever:
         ]
         try:
             raw_scores = self.reranker.predict(pairs)
+            numeric_scores = [float(score) for score in raw_scores]
+            if len(numeric_scores) != len(candidates):
+                raise ValueError(
+                    f"Reranker returned {len(numeric_scores)} scores for {len(candidates)} candidates"
+                )
+            if not all(math.isfinite(score) for score in numeric_scores):
+                raise ValueError("Reranker returned a non-finite score")
         except Exception as exc:
             self.reranker_error = str(exc)
+            if self.require_reranker:
+                raise RerankerUnavailableError(
+                    f"Required reranker {self.reranker_model!r} failed during prediction"
+                ) from exc
             return candidates
 
         reranked: list[RetrievedClause] = []
-        ordered = sorted(enumerate(raw_scores), key=lambda item: float(item[1]), reverse=True)
+        ordered = sorted(enumerate(numeric_scores), key=lambda item: item[1], reverse=True)
         rank_by_index = {index: rank for rank, (index, _) in enumerate(ordered, start=1)}
-        for index, (result, raw_score) in enumerate(zip(candidates, raw_scores)):
+        for index, (result, raw_score) in enumerate(zip(candidates, numeric_scores, strict=True)):
             probability_like = 1.0 / (1.0 + math.exp(-max(-20.0, min(20.0, float(raw_score)))))
             combined = 0.65 * probability_like + 0.35 * (result.fused_score or 0.0)
             reranked.append(

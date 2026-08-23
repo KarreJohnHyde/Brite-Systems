@@ -41,6 +41,7 @@ class VectorStore:
         *,
         embedding_backend: str = "unknown",
         embedding_model: str = "unknown",
+        embedding_artifact_sha256: str | None = None,
         corpus_sha256: str | None = None,
     ) -> None:
         if embeddings.ndim != 2:
@@ -51,6 +52,11 @@ class VectorStore:
             raise ValueError(f"Embedding dimension {embeddings.shape[1]} != configured {self.dimension}")
         if not np.isfinite(embeddings).all():
             raise ValueError("Embeddings contain NaN or infinite values")
+        if embedding_artifact_sha256 is not None and (
+            len(embedding_artifact_sha256) != 64
+            or any(character not in "0123456789abcdef" for character in embedding_artifact_sha256)
+        ):
+            raise ValueError("Embedding artifact digest must be a lowercase SHA-256 hex string")
 
         try:
             import faiss
@@ -70,6 +76,8 @@ class VectorStore:
             "embedding_model": embedding_model,
             "corpus_sha256": corpus_sha256,
         }
+        if embedding_artifact_sha256 is not None:
+            self.manifest["embedding_artifact_sha256"] = embedding_artifact_sha256
 
     def search(self, query_embedding: np.ndarray, k: int = 10) -> list[tuple[PolicyChunk, float]]:
         if self.index is None or not self.chunks:

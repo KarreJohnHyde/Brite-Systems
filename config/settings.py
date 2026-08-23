@@ -38,6 +38,7 @@ class Settings(BaseModel):
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     enable_hybrid_search: bool = True
     enable_reranking: bool = False
+    require_reranker: bool = False
     enable_neighbor_retrieval: bool = True
     enable_contradiction_check: bool = True
     enable_claim_validation: bool = True
@@ -110,6 +111,7 @@ class Settings(BaseModel):
             "reranker_model": os.getenv("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
             "enable_hybrid_search": _env_bool("ENABLE_HYBRID_SEARCH", True),
             "enable_reranking": _env_bool("ENABLE_RERANKING", False),
+            "require_reranker": _env_bool("REQUIRE_RERANKER", False),
             "enable_neighbor_retrieval": _env_bool("ENABLE_NEIGHBOR_RETRIEVAL", True),
             "enable_contradiction_check": _env_bool("ENABLE_CONTRADICTION_CHECK", True),
             "enable_claim_validation": _env_bool("ENABLE_CLAIM_VALIDATION", True),

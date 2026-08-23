@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
+import types
 from pathlib import Path
 
 import numpy as np
@@ -10,7 +12,7 @@ import pytest
 from src.embeddings import EmbeddingEngine
 from src.lexical import BM25Index
 from src.pipeline import GroundedAnswerPipeline
-from src.retriever import Retriever
+from src.retriever import RerankerUnavailableError, Retriever
 from src.vector_store import IndexIntegrityError, VectorStore
 
 
@@ -47,6 +49,37 @@ def test_vector_index_persists_and_reloads_identical_searches(
         atol=1e-7,
     )
     assert loaded.manifest == vector_store.manifest
+
+
+def test_vector_manifest_records_local_embedding_artifact_digest(
+    chunks,
+    hashing_engine: EmbeddingEngine,
+) -> None:
+    digest = "a" * 64
+    store = VectorStore(hashing_engine.dimension)
+    store.build(
+        hashing_engine.encode_clauses(chunks[:2]),
+        chunks[:2],
+        embedding_backend="sentence-transformers",
+        embedding_model="models/candidate",
+        embedding_artifact_sha256=digest,
+    )
+
+    assert store.manifest["embedding_artifact_sha256"] == digest
+
+
+def test_vector_manifest_rejects_invalid_embedding_artifact_digest(
+    chunks,
+    hashing_engine: EmbeddingEngine,
+) -> None:
+    store = VectorStore(hashing_engine.dimension)
+
+    with pytest.raises(ValueError, match="lowercase SHA-256"):
+        store.build(
+            hashing_engine.encode_clauses(chunks[:2]),
+            chunks[:2],
+            embedding_artifact_sha256="not-a-digest",
+        )
 
 
 @pytest.mark.parametrize(
@@ -204,6 +237,90 @@ def test_reranker_cannot_discard_the_top_lexical_anchor(
     results = retriever.retrieve("whats the max resorce amount a houshold can hav?")
 
     assert "2.4.1" in {item.chunk.clause_id for item in results}
+
+
+def test_required_reranker_fails_closed_when_model_cannot_load(
+    monkeypatch: pytest.MonkeyPatch,
+    vector_store: VectorStore,
+    hashing_engine: EmbeddingEngine,
+) -> None:
+    fake_module = types.ModuleType("sentence_transformers")
+
+    class BrokenCrossEncoder:
+        def __init__(self, model_name: str) -> None:
+            raise OSError(f"missing model: {model_name}")
+
+    fake_module.CrossEncoder = BrokenCrossEncoder
+    monkeypatch.setitem(sys.modules, "sentence_transformers", fake_module)
+
+    with pytest.raises(RerankerUnavailableError, match="could not be loaded"):
+        Retriever(
+            hashing_engine,
+            vector_store,
+            use_reranker=True,
+            require_reranker=True,
+            use_neighbors=False,
+        )
+
+
+def test_required_reranker_fails_closed_when_prediction_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    vector_store: VectorStore,
+    hashing_engine: EmbeddingEngine,
+) -> None:
+    fake_module = types.ModuleType("sentence_transformers")
+
+    class BrokenCrossEncoder:
+        def __init__(self, model_name: str) -> None:
+            self.model_name = model_name
+
+        @staticmethod
+        def predict(pairs):
+            raise RuntimeError("prediction failed")
+
+    fake_module.CrossEncoder = BrokenCrossEncoder
+    monkeypatch.setitem(sys.modules, "sentence_transformers", fake_module)
+    retriever = Retriever(
+        hashing_engine,
+        vector_store,
+        use_reranker=True,
+        require_reranker=True,
+        use_neighbors=False,
+    )
+
+    with pytest.raises(RerankerUnavailableError, match="failed during prediction"):
+        retriever.retrieve("What is the household resource limit?")
+
+
+def test_optional_reranker_prediction_failure_preserves_baseline_candidates(
+    monkeypatch: pytest.MonkeyPatch,
+    vector_store: VectorStore,
+    hashing_engine: EmbeddingEngine,
+) -> None:
+    fake_module = types.ModuleType("sentence_transformers")
+
+    class BrokenCrossEncoder:
+        def __init__(self, model_name: str) -> None:
+            self.model_name = model_name
+
+        @staticmethod
+        def predict(pairs):
+            raise RuntimeError("prediction failed")
+
+    fake_module.CrossEncoder = BrokenCrossEncoder
+    monkeypatch.setitem(sys.modules, "sentence_transformers", fake_module)
+    retriever = Retriever(
+        hashing_engine,
+        vector_store,
+        use_reranker=True,
+        require_reranker=False,
+        use_neighbors=False,
+    )
+
+    results = retriever.retrieve("What is the household resource limit?")
+
+    assert results
+    assert retriever.reranker_error == "prediction failed"
 
 
 def test_neighbor_expansion_keeps_standard_and_extended_absence_rules(

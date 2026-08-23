@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import logging
 from pathlib import Path
 
 from config.settings import Settings
+from src.artifact_integrity import resolve_local_directory, sha256_directory
 from src.decision_engine import DecisionEngine
 from src.embeddings import EmbeddingEngine
 from src.evidence import EvidenceAnalyzer
@@ -46,12 +48,24 @@ def ingest_corpus(settings: Settings) -> tuple[IngestionReport, dict]:
         dimension=settings.embedding_dimension,
     )
     embeddings = engine.encode_clauses(chunks)
+    local_embedding = (
+        resolve_local_directory(
+            settings.embedding_model,
+            base_dir=settings.project_root,
+        )
+        if engine.backend == "sentence-transformers"
+        else None
+    )
+    embedding_artifact_sha256 = (
+        sha256_directory(local_embedding) if local_embedding is not None else None
+    )
     store = VectorStore(engine.dimension)
     store.build(
         embeddings,
         chunks,
         embedding_backend=engine.backend,
         embedding_model=engine.model_name,
+        embedding_artifact_sha256=embedding_artifact_sha256,
         corpus_sha256=report.source_sha256,
     )
     store.save(settings.index_dir)
@@ -79,6 +93,7 @@ class GroundedAnswerPipeline:
             store,
             use_hybrid=settings.enable_hybrid_search,
             use_reranker=settings.enable_reranking,
+            require_reranker=settings.require_reranker,
             use_neighbors=settings.enable_neighbor_retrieval,
             initial_k=settings.initial_retrieval_k,
             rerank_k=settings.rerank_k,
@@ -130,6 +145,7 @@ class GroundedAnswerPipeline:
             raise IndexIntegrityError(
                 f"Configured embedding model {settings.embedding_model!r} does not match index model {model!r}."
             )
+        cls._validate_embedding_artifact(settings, manifest)
 
         engine = EmbeddingEngine(
             settings.embedding_model,
@@ -151,6 +167,38 @@ class GroundedAnswerPipeline:
                 thinking_level=settings.gemini_thinking_level,
             )
         return cls(settings, engine, store, llm_provider=provider)
+
+    @staticmethod
+    def _validate_embedding_artifact(settings: Settings, manifest: dict) -> None:
+        """Verify a locally trained embedding directory against the index manifest."""
+
+        if "embedding_artifact_sha256" not in manifest:
+            return
+        expected = manifest.get("embedding_artifact_sha256")
+        if not isinstance(expected, str) or len(expected) != 64 or any(
+            character not in "0123456789abcdef" for character in expected
+        ):
+            raise IndexIntegrityError("Index manifest has an invalid embedding artifact digest")
+
+        local_embedding = resolve_local_directory(
+            settings.embedding_model,
+            base_dir=settings.project_root,
+        )
+        if local_embedding is None:
+            raise IndexIntegrityError(
+                "The indexed embedding artifact was local, but the configured model directory is missing"
+            )
+        try:
+            actual = sha256_directory(local_embedding)
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise IndexIntegrityError(
+                f"Could not verify the local embedding artifact: {local_embedding}"
+            ) from exc
+        if not hmac.compare_digest(actual, expected):
+            raise IndexIntegrityError(
+                "The local embedding artifact differs from the model used to build the index; "
+                "restore the artifact or re-run ingest"
+            )
 
     @staticmethod
     def _validate_corpus_identity(corpus_path: Path, manifest: dict) -> None:
