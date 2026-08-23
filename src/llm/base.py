@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 
-from src.models import GenerationSelection, PolicyChunk
+from src.models import CoverageGateResult, PolicyChunk
 
 
 class LLMProviderError(RuntimeError):
@@ -16,10 +16,21 @@ class LLMProvider(ABC):
     """Interface implemented by optional structured-generation providers."""
 
     @abstractmethod
-    def generate_structured(
+    def evaluate_coverage(
         self,
         question: str,
         contexts: Sequence[PolicyChunk],
-    ) -> GenerationSelection:
-        """Return a validated selection grounded only in ``contexts``."""
+    ) -> CoverageGateResult:
+        """Evaluate if the retrieved contexts can answer the question."""
+        raise LLMProviderError("An abstract LLM provider cannot generate a response")
+
+    @abstractmethod
+    def generate_answer(
+        self,
+        question: str,
+        contexts: Sequence[PolicyChunk],
+        routing_table: dict,
+        reference_date: str,
+    ) -> str:
+        """Generate the final structured text answer based on the Master Prompt."""
         raise LLMProviderError("An abstract LLM provider cannot generate a response")

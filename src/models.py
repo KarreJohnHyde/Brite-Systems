@@ -39,6 +39,10 @@ class PolicyChunk(BaseModel):
     document_version: str | None = None
     effective_date: str | None = None
     active: bool = True
+    source_kind: Literal["manual", "amendment"] = "manual"
+    document_title: str | None = None
+    amendment_number: str | None = None
+    issued_date: str | None = None
 
     text: str
     raw_text: str
@@ -51,6 +55,11 @@ class PolicyChunk(BaseModel):
     section_title: str | None = None
     clause_id: str | None = None
     official_clause_id: bool = True
+    locator_kind: Literal["clause", "paragraph"] = "clause"
+    source_locator: str | None = None
+    source_locator_label: str | None = None
+    amends_clause_ids: list[str] = Field(default_factory=list)
+    inserts_clause_ids: list[str] = Field(default_factory=list)
 
     page: int | None = None
     line_start: int
@@ -58,10 +67,14 @@ class PolicyChunk(BaseModel):
     start_offset: int
     end_offset: int
     source_order: int
+    document_index: int = 0
+    document_order: int | None = None
     cross_references: list[str] = Field(default_factory=list)
 
     @property
     def source_label(self) -> str:
+        if self.source_locator_label:
+            return self.source_locator_label
         clause = f"§{self.clause_id}" if self.clause_id else self.chunk_id
         return f"{clause} — {self.section_title or self.part_title or self.document_name}"
 
@@ -112,6 +125,15 @@ class Citation(BaseModel):
     line_start: int
     line_end: int
     excerpt: str
+    document_id: str | None = None
+    document_name: str | None = None
+    document_title: str | None = None
+    source_kind: Literal["manual", "amendment"] | None = None
+    amendment_number: str | None = None
+    effective_date: str | None = None
+    locator_kind: Literal["clause", "paragraph"] | None = None
+    source_locator: str | None = None
+    source_locator_label: str | None = None
 
 
 class ConflictFinding(BaseModel):
@@ -160,6 +182,13 @@ class GenerationSelection(BaseModel):
     reason: str
 
 
+class CoverageGateResult(BaseModel):
+    covered: bool
+    confidence: float
+    matched_clause_ids: list[str] = Field(default_factory=list)
+    uncovered_aspect: str | None = None
+
+
 class IngestionReport(BaseModel):
     document_id: str
     document_name: str
@@ -177,3 +206,23 @@ class IngestionReport(BaseModel):
     duplicate_clause_groups: list[list[str]] = Field(default_factory=list)
     unresolved_cross_references: list[str] = Field(default_factory=list)
     parser: str = "markdown-clause-v2"
+    document_title: str | None = None
+    source_kind: Literal["manual", "amendment"] = "manual"
+    effective_date: str | None = None
+    issued_date: str | None = None
+
+
+class CombinedCorpusReport(BaseModel):
+    """Deterministic provenance report for an ordered set of policy sources."""
+
+    combined_source_sha256: str
+    source_sha256: str
+    source_reports: list[IngestionReport]
+    documents: int
+    source_bytes: int
+    source_lines: int
+    clauses: int
+    chunks: int
+    duplicate_source_locators: list[str] = Field(default_factory=list)
+    unresolved_cross_references: list[str] = Field(default_factory=list)
+    parser: str = "markdown-multisource-v1"

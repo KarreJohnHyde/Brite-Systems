@@ -9,8 +9,8 @@ from typing import Any, Literal
 from pydantic import ValidationError
 
 from src.llm.base import LLMProvider, LLMProviderError
-from src.llm.prompts import SYSTEM_PROMPT, build_generation_prompt, source_ids
-from src.models import Decision, GenerationSelection, PolicyChunk
+from src.llm.prompts import build_coverage_gate_prompt, build_generation_prompt
+from src.models import CoverageGateResult, PolicyChunk
 
 DEFAULT_GEMINI_MODEL = "gemini-3.6-flash"
 
@@ -55,25 +55,28 @@ class GeminiProvider(LLMProvider):
                 f"Gemini client initialization failed ({type(exc).__name__})"
             ) from exc
 
-    def generate_structured(
+    def evaluate_coverage(
         self,
         question: str,
         contexts: Sequence[PolicyChunk],
-    ) -> GenerationSelection:
-        """Request, parse, and source-validate one structured selection."""
-        try:
-            prompt = build_generation_prompt(question, contexts)
-            allowed_ids = set(source_ids(contexts))
-        except (TypeError, ValueError) as exc:
-            raise LLMProviderError(f"Invalid Gemini generation input: {exc}") from exc
+    ) -> CoverageGateResult:
+        """Call the Coverage Gate LLM prompt and return a structured assessment."""
+        if not contexts:
+            return CoverageGateResult(
+                covered=False,
+                confidence=1.0,
+                matched_clause_ids=[],
+                uncovered_aspect="No clauses were retrieved.",
+            )
 
+        prompt = build_coverage_gate_prompt(question, contexts)
+        
         try:
             generation_config = {
-                "system_instruction": SYSTEM_PROMPT,
                 "temperature": 0.0,
-                "max_output_tokens": 2048,
+                "max_output_tokens": 1024,
                 "response_mime_type": "application/json",
-                "response_schema": GenerationSelection,
+                "response_schema": CoverageGateResult,
             }
             if self.model.startswith("gemini-3"):
                 generation_config["thinking_config"] = {
@@ -89,24 +92,53 @@ class GeminiProvider(LLMProvider):
                 f"Gemini generation request failed ({type(exc).__name__})"
             ) from exc
 
-        selection = self._parse_response(response)
-        self._validate_selection(selection, allowed_ids)
-        return selection
+        return self._parse_coverage_response(response)
+
+    def generate_answer(
+        self,
+        question: str,
+        contexts: Sequence[PolicyChunk],
+        routing_table: dict,
+        reference_date: str,
+    ) -> str:
+        """Generate the final structured text answer based on the Master Prompt."""
+        prompt = build_generation_prompt(question, contexts, routing_table, reference_date)
+        
+        try:
+            generation_config = {
+                "temperature": 0.0,
+                "max_output_tokens": 2048,
+                "response_mime_type": "text/plain",
+            }
+            if self.model.startswith("gemini-3"):
+                generation_config["thinking_config"] = {
+                    "thinking_level": self.thinking_level
+                }
+            response = self._client.models.generate_content(
+                model=self.model,
+                contents=prompt,
+                config=generation_config,
+            )
+            return getattr(response, "text", "")
+        except Exception as exc:
+            raise LLMProviderError(
+                f"Gemini generation request failed ({type(exc).__name__})"
+            ) from exc
 
     @staticmethod
-    def _parse_response(response: Any) -> GenerationSelection:
+    def _parse_coverage_response(response: Any) -> CoverageGateResult:
         """Validate either Gemini's parsed object or its JSON text fallback."""
         try:
             parsed = getattr(response, "parsed", None)
-            if isinstance(parsed, GenerationSelection):
+            if isinstance(parsed, CoverageGateResult):
                 return parsed
             if parsed is not None:
-                return GenerationSelection.model_validate(parsed)
+                return CoverageGateResult.model_validate(parsed)
 
             response_text = getattr(response, "text", None)
             if not isinstance(response_text, str) or not response_text.strip():
                 raise LLMProviderError("Gemini returned no structured response")
-            return GenerationSelection.model_validate_json(response_text)
+            return CoverageGateResult.model_validate_json(response_text)
         except LLMProviderError:
             raise
         except (ValidationError, TypeError, ValueError) as exc:
@@ -115,28 +147,3 @@ class GeminiProvider(LLMProvider):
             raise LLMProviderError(
                 f"Gemini response parsing failed ({type(exc).__name__})"
             ) from exc
-
-    @staticmethod
-    def _validate_selection(
-        selection: GenerationSelection,
-        allowed_ids: set[str],
-    ) -> None:
-        """Enforce source allowlisting and decision-specific source counts."""
-        selected_ids = selection.supporting_source_ids
-        if len(selected_ids) != len(set(selected_ids)):
-            raise LLMProviderError("Gemini returned duplicate supporting source IDs")
-
-        unknown_ids = sorted(set(selected_ids) - allowed_ids)
-        if unknown_ids:
-            raise LLMProviderError(
-                "Gemini selected source IDs that were not supplied in context"
-            )
-
-        if not selection.answer.strip() or not selection.reason.strip():
-            raise LLMProviderError("Gemini returned an empty answer or reason")
-        if selection.decision == Decision.ANSWER and not selected_ids:
-            raise LLMProviderError("Gemini ANSWER requires at least one source ID")
-        if selection.decision == Decision.CONFLICT and len(selected_ids) < 2:
-            raise LLMProviderError("Gemini CONFLICT requires at least two source IDs")
-        if selection.decision == Decision.REFUSE and selected_ids:
-            raise LLMProviderError("Gemini REFUSE must not select supporting source IDs")

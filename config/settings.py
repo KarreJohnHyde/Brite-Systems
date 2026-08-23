@@ -26,6 +26,8 @@ class Settings(BaseModel):
 
     project_root: Path = PROJECT_ROOT
     corpus_path: Path = PROJECT_ROOT / "data" / "policy-manual.md"
+    amendment_path: Path | None = PROJECT_ROOT / "data" / "amendment-2026-01.md"
+    timeline_path: Path = PROJECT_ROOT / "data" / "policy_timeline.json"
     processed_path: Path = PROJECT_ROOT / "data" / "processed" / "chunks.json"
     corpus_report_path: Path = PROJECT_ROOT / "data" / "processed" / "corpus-report.json"
     index_dir: Path = PROJECT_ROOT / "data" / "indexes"
@@ -62,6 +64,8 @@ class Settings(BaseModel):
 
     @field_validator(
         "corpus_path",
+        "amendment_path",
+        "timeline_path",
         "processed_path",
         "corpus_report_path",
         "index_dir",
@@ -70,8 +74,18 @@ class Settings(BaseModel):
         mode="before",
     )
     @classmethod
-    def _expand_path(cls, value: str | Path) -> Path:
+    def _expand_path(cls, value: str | Path | None) -> Path | None:
+        if value is None:
+            return None
         return Path(value).expanduser().resolve()
+
+    @property
+    def source_paths(self) -> tuple[Path, ...]:
+        """Authoritative source files in deterministic ingestion order."""
+
+        if self.amendment_path is None:
+            return (self.corpus_path,)
+        return (self.corpus_path, self.amendment_path)
 
     @classmethod
     def from_env(
@@ -79,6 +93,7 @@ class Settings(BaseModel):
         *,
         project_root: str | Path | None = None,
         corpus_path: str | Path | None = None,
+        amendment_path: str | Path | None = None,
         embedding_backend: str | None = None,
         llm_provider: str | None = None,
     ) -> "Settings":
@@ -98,10 +113,26 @@ class Settings(BaseModel):
             return Path(raw).expanduser().resolve() if raw else root / relative
 
         _backend = embedding_backend or os.getenv("EMBEDDING_BACKEND", "hashing")
+        if amendment_path is not None:
+            selected_amendment: Path | None = Path(amendment_path).expanduser().resolve()
+        elif corpus_path is not None:
+            # An explicitly supplied alternate manual is a self-contained corpus
+            # unless its corresponding amendment is also supplied explicitly.
+            selected_amendment = None
+        else:
+            raw_amendment = os.getenv("AMENDMENT_PATH")
+            if raw_amendment and raw_amendment.strip().lower() in {"none", "off", "disabled"}:
+                selected_amendment = None
+            elif raw_amendment:
+                selected_amendment = Path(raw_amendment).expanduser().resolve()
+            else:
+                selected_amendment = root / "data/amendment-2026-01.md"
 
         data: dict[str, object] = {
             "project_root": root,
             "corpus_path": Path(corpus_path).resolve() if corpus_path else path_env("CORPUS_PATH", "data/policy-manual.md"),
+            "amendment_path": selected_amendment,
+            "timeline_path": path_env("POLICY_TIMELINE_PATH", "data/policy_timeline.json"),
             "processed_path": path_env("PROCESSED_PATH", "data/processed/chunks.json"),
             "corpus_report_path": path_env("CORPUS_REPORT_PATH", "data/processed/corpus-report.json"),
             "index_dir": path_env("INDEX_DIR", f"data/indexes/{_backend}"),

@@ -15,6 +15,7 @@ from src.embeddings import EmbeddingEngine
 from src.evidence import EvidenceAnalyzer
 from src.generator import AnswerBuilder
 from src.models import (
+    CombinedCorpusReport,
     Decision,
     EvidenceLevel,
     IngestionReport,
@@ -23,23 +24,32 @@ from src.models import (
 )
 from src.observability import PipelineTracer
 from src.parser import (
+    build_combined_corpus_report,
     build_corpus_report,
     find_chunks,
     parse_policy_manual,
+    parse_policy_sources,
     persist_chunks,
 )
 from src.refusal import load_contacts, select_next_step
 from src.retriever import Retriever
+from src.temporal import TemporalPolicyResolver
 from src.vector_store import IndexIntegrityError, VectorStore
 
 LOGGER = logging.getLogger("grounded_answer")
 
 
-def ingest_corpus(settings: Settings) -> tuple[IngestionReport, dict]:
+def ingest_corpus(settings: Settings) -> tuple[IngestionReport | CombinedCorpusReport, dict]:
     """Parse, persist, embed, and index the configured source corpus."""
 
-    chunks = parse_policy_manual(settings.corpus_path)
-    report = build_corpus_report(settings.corpus_path, chunks)
+    paths = settings.source_paths
+    if len(paths) == 1:
+        chunks = parse_policy_manual(paths[0])
+        report = build_corpus_report(paths[0], chunks)
+    else:
+        chunks = parse_policy_sources(paths[0], paths[1:])
+        report = build_combined_corpus_report(paths, chunks)
+        
     persist_chunks(chunks, report, settings.processed_path, settings.corpus_report_path)
 
     engine = EmbeddingEngine(
@@ -88,6 +98,11 @@ class GroundedAnswerPipeline:
         self.embedding_engine = embedding_engine
         self.store = store
         self._validate_policy_companions(settings, store.chunks)
+        self.temporal_resolver = TemporalPolicyResolver(
+            store.chunks,
+            timeline_path=settings.timeline_path,
+            contacts_path=settings.contacts_path,
+        )
         self.retriever = Retriever(
             embedding_engine,
             store,
@@ -154,8 +169,8 @@ class GroundedAnswerPipeline:
         )
         store = VectorStore(engine.dimension)
         store.load(settings.index_dir)
-        cls._validate_corpus_identity(settings.corpus_path, store.manifest)
-        cls._validate_chunk_metadata(settings.corpus_path, store.chunks)
+        cls._validate_corpus_identity(settings.source_paths, store.manifest)
+        cls._validate_chunk_metadata(settings.source_paths, store.chunks)
 
         provider = None
         if settings.llm_provider == "gemini":
@@ -201,10 +216,12 @@ class GroundedAnswerPipeline:
             )
 
     @staticmethod
-    def _validate_corpus_identity(corpus_path: Path, manifest: dict) -> None:
-        if not corpus_path.exists():
-            raise FileNotFoundError(f"Configured policy corpus is missing: {corpus_path}")
-        actual = hashlib.sha256(corpus_path.read_bytes()).hexdigest()
+    def _validate_corpus_identity(source_paths: tuple[Path, ...], manifest: dict) -> None:
+        from src.parser import source_bundle_sha256
+        for path in source_paths:
+            if not path.exists():
+                raise FileNotFoundError(f"Configured policy corpus is missing: {path}")
+        actual = source_bundle_sha256(source_paths)
         expected = manifest.get("corpus_sha256")
         if not expected or actual != expected:
             raise IndexIntegrityError(
@@ -212,10 +229,14 @@ class GroundedAnswerPipeline:
             )
 
     @staticmethod
-    def _validate_chunk_metadata(corpus_path: Path, indexed: list[PolicyChunk]) -> None:
+    def _validate_chunk_metadata(source_paths: tuple[Path, ...], indexed: list[PolicyChunk]) -> None:
         """Ensure citation metadata is a faithful derivation of the source file."""
-
-        canonical = parse_policy_manual(corpus_path)
+        from src.parser import parse_policy_manual, parse_policy_sources
+        if len(source_paths) == 1:
+            canonical = parse_policy_manual(source_paths[0])
+        else:
+            canonical = parse_policy_sources(source_paths[0], source_paths[1:])
+            
         if len(canonical) != len(indexed):
             raise IndexIntegrityError(
                 "Indexed citation metadata does not match the source corpus; run `python main.py ingest`."
@@ -291,6 +312,24 @@ class GroundedAnswerPipeline:
             answer_provider=self.settings.llm_provider,
             model=model,
         ) as query_span:
+            with self.tracer.span("temporal-applicability", "tool") as temporal_span:
+                temporal_answer = self.temporal_resolver.resolve(normalized, include_trace=include_trace)
+                if temporal_answer is not None:
+                    temporal_span.end({"decision": temporal_answer.decision.value})
+                    query_span.end(
+                        {
+                            "decision": temporal_answer.decision.value,
+                            "evidence_level": temporal_answer.evidence_level.value,
+                            "citation_count": len(temporal_answer.citations),
+                            "citation_clause_ids": [
+                                citation.clause_id or citation.chunk_id for citation in temporal_answer.citations
+                            ],
+                            "citation_validation": "valid",
+                        }
+                    )
+                    return temporal_answer
+                temporal_span.end({"decision": "skipped"})
+
             with self.tracer.span("retrieve-policy-evidence", "retriever") as retrieval_span:
                 retrieved = self.retriever.retrieve(normalized)
                 retrieval_span.end(
@@ -413,4 +452,7 @@ class GroundedAnswerPipeline:
 def load_source_chunks(settings: Settings) -> list[PolicyChunk]:
     """Read source lookup metadata directly from the authoritative corpus."""
 
-    return parse_policy_manual(settings.corpus_path)
+    paths = settings.source_paths
+    if len(paths) == 1:
+        return parse_policy_manual(paths[0])
+    return parse_policy_sources(paths[0], paths[1:])

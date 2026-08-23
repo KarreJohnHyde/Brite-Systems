@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "source_verified": true,
+  "manual_document_id": "calder-hsp-policy-manual",
+  "amendment_document_id": "calder-hsp-amendment-2026-01",
+  "amendment_number": "2026-01",
+  "effective_date": "2026-03-01",
+  "issued_date": "2026-02-12",
+  "rules": [
+    {
+      "id": "earnings-disregard",
+      "topic": "earnings_disregard",
+      "operation": "substitute",
+      "target_clause_ids": ["6.4.1"],
+      "amendment_paragraph_id": "1.1",
+      "transition_paragraph_id": "5.1",
+      "temporal_basis": "determination_date",
+      "before": {"monthly_amount": 120},
+      "after": {"monthly_amount": 175},
+      "source_verified": true
+    },
+    {
+      "id": "reporting-deadline",
+      "topic": "reporting_deadline",
+      "operation": "substitute",
+      "target_clause_ids": ["4.3.2"],
+      "amendment_paragraph_id": "2.1",
+      "transition_paragraph_id": "5.2",
+      "temporal_basis": "change_date",
+      "before": {"calendar_days": 10},
+      "after": {"calendar_days": 14},
+      "expected_replacement_count": 2,
+      "source_verified": true
+    },
+    {
+      "id": "overpayment-reporting-protection",
+      "topic": "reporting_deadline",
+      "operation": "substitute",
+      "target_clause_ids": ["9.1.4"],
+      "amendment_paragraph_id": "2.2",
+      "transition_paragraph_id": "5.2",
+      "temporal_basis": "change_date",
+      "before": {"calendar_days": 30},
+      "after": {"calendar_days": 14},
+      "expected_replacement_count": 1,
+      "source_verified": true
+    },
+    {
+      "id": "income-thresholds",
+      "topic": "income_threshold",
+      "operation": "replace_table",
+      "target_clause_ids": ["6.6.1"],
+      "amendment_paragraph_id": "3.1",
+      "transition_paragraph_id": "5.1",
+      "temporal_basis": "determination_date",
+      "before": {
+        "1": 1180,
+        "2": 1590,
+        "3": 2000,
+        "4": 2410,
+        "5": 2820,
+        "additional": 410
+      },
+      "after": {
+        "1": 1225,
+        "2": 1650,
+        "3": 2075,
+        "4": 2500,
+        "5": 2925,
+        "additional": 425
+      },
+      "source_verified": true
+    },
+    {
+      "id": "sanction-rate",
+      "topic": "sanction_rate",
+      "operation": "substitute",
+      "target_clause_ids": ["10.5.2"],
+      "amendment_paragraph_id": "4.1",
+      "transition_paragraph_id": "5.1",
+      "temporal_basis": "determination_date",
+      "before": {"percent": 20},
+      "after": {"percent": 15},
+      "expected_replacement_count": 1,
+      "source_verified": true
+    },
+    {
+      "id": "increased-award-reporting-sanction",
+      "topic": "increased_award_reporting_sanction",
+      "operation": "insert",
+      "target_clause_ids": ["10.5.3A"],
+      "amendment_paragraph_id": "4.2",
+      "transition_paragraph_id": "5.1",
+      "temporal_basis": "determination_date",
+      "before": {"rule_in_force": false},
+      "after": {"rule_in_force": true},
+      "source_verified": true
+    }
+  ],
+  "spanning_period": {
+    "temporal_basis": "claim_period",
+    "transition_paragraph_id": "5.3",
+    "apportionment_clause_id": "7.4.3",
+    "source_verified": true
+  }
+}
