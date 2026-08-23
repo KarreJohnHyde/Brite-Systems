@@ -510,6 +510,7 @@ def main() -> int:
                 }
         report["final_candidate"] = candidate
 
+    report["release_assessment"] = _release_assessment(report)
     report["status"] = "complete"
     report["duration_seconds"] = round(time.perf_counter() - started, 3)
     report["completed_at_utc"] = datetime.now(timezone.utc).isoformat()
@@ -1019,6 +1020,74 @@ def _summarize_runs(metrics: list[dict[str, Any]]) -> dict[str, Any]:
     return summary
 
 
+def _release_assessment(report: dict[str, Any]) -> dict[str, Any]:
+    """Make a conservative, metric-backed recommendation without auto-promoting."""
+
+    baseline_ranking = report["baseline"]["reranked"]
+    trained_ranking = report["cross_validation_summary"]["reranked"]
+    baseline_binary = report["baseline"]["cross_encoder_binary"]
+    trained_binary = report["cross_validation_summary"]["cross_encoder_binary"]
+    deltas = {
+        "reranked_recall_at_3": round(
+            trained_ranking["recall_at_3"]["mean"] - baseline_ranking["recall_at_3"],
+            6,
+        ),
+        "reranked_recall_at_6": round(
+            trained_ranking["recall_at_6"]["mean"] - baseline_ranking["recall_at_6"],
+            6,
+        ),
+        "reranked_recall_at_10": round(
+            trained_ranking["recall_at_10"]["mean"] - baseline_ranking["recall_at_10"],
+            6,
+        ),
+        "reranked_mrr": round(
+            trained_ranking["mrr"]["mean"] - baseline_ranking["mrr"], 6
+        ),
+        "reranked_ndcg_at_10": round(
+            trained_ranking["ndcg_at_10"]["mean"] - baseline_ranking["ndcg_at_10"],
+            6,
+        ),
+        "cross_encoder_roc_auc": round(
+            trained_binary["roc_auc"]["mean"] - baseline_binary["roc_auc"], 6
+        ),
+    }
+    end_to_end = report.get("final_candidate", {}).get("end_to_end", {})
+    safety_regression = bool(end_to_end) and any(
+        result.get("failures", 1) for result in end_to_end.values()
+    )
+    recall_improved = deltas["reranked_recall_at_6"] > 0
+    auc_not_worse = deltas["cross_encoder_roc_auc"] >= 0
+    reasons = []
+    if not recall_improved:
+        reasons.append(
+            "Held-out reranked Recall@6 did not improve over the pretrained baseline."
+        )
+    if not auc_not_worse:
+        reasons.append("Held-out cross-encoder pairwise ROC AUC decreased.")
+    if not end_to_end:
+        reasons.append("Strict end-to-end candidate evaluation was not run.")
+    elif safety_regression:
+        reasons.append("At least one strict end-to-end case regressed.")
+    else:
+        reasons.append(
+            "All recorded strict end-to-end core and adversarial cases passed."
+        )
+    reasons.append(
+        "Only 33 reviewed queries and one reproducible seed were available; no blind staff-query set exists."
+    )
+    eligible = (
+        recall_improved and auc_not_worse and bool(end_to_end) and not safety_regression
+    )
+    return {
+        "decision": (
+            "ELIGIBLE_FOR_BLIND_VALIDATION" if eligible else "KEEP_PRETRAINED_BASELINE"
+        ),
+        "candidate_remains_opt_in": True,
+        "held_out_deltas": deltas,
+        "reasons": reasons,
+    }
+
+
 def _write_progress(report: dict[str, Any], result_dir: Path) -> None:
     result_dir.mkdir(parents=True, exist_ok=True)
     (result_dir / "report.json").write_text(
@@ -1079,6 +1148,18 @@ def _markdown(report: dict[str, Any]) -> str:
                 f"- {label.title()} end-to-end: {result['passes']} passed, {result['failures']} failed"
             )
         lines.append("")
+    assessment = report.get("release_assessment")
+    if assessment:
+        lines.extend(
+            [
+                "## Release assessment",
+                "",
+                f"**Decision:** `{assessment['decision']}`",
+                "",
+                *[f"- {reason}" for reason in assessment["reasons"]],
+                "",
+            ]
+        )
     lines.extend(
         [
             "## Release decision",

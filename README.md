@@ -256,7 +256,7 @@ zero false answers and zero missed conflicts for the recommended candidate.
 The separate adversarial set passed 15 / 15 cases covering ambiguity, deictic
 follow-ups, exact and forged clause references, colloquial wording, typos,
 service-access gaps, out-of-scope questions, nonsense input, and mixed
-supported/unsupported asks. The automated suite passed 110 tests. These remain
+supported/unsupported asks. The automated suite passed 128 tests. These remain
 bounded measurements, not generalization guarantees; see
 [`evaluation/results/evaluation.md`](evaluation/results/evaluation.md) and
 [`evaluation/results/adversarial/evaluation.md`](evaluation/results/adversarial/evaluation.md) and
@@ -322,7 +322,44 @@ python main.py evaluate --embedding-backend sentence-transformers
 The first run downloads `sentence-transformers/all-MiniLM-L6-v2` and, when
 reranking is enabled, `cross-encoder/ms-marco-MiniLM-L-6-v2`. These models run
 locally after download. If the reranker cannot load, retrieval continues without
-it; reranking is never required for the safe baseline.
+it; reranking is never required for the safe baseline. Set
+`REQUIRE_RERANKER=true` for candidate evaluation so load or prediction failures
+fail closed instead of silently testing a different profile.
+
+## Reproducible local model training
+
+The supplied labels can train the bi-encoder and cross-encoder only. Stable
+hashing, BM25, FAISS `IndexFlatIP`, and the safety rules have no learned weights.
+Gemini is a hosted phrasing API and is tested through its provider contract; it
+is not fine-tuned by this repository. The query files do not contain
+human-authored target answers, so generation fine-tuning would fabricate labels.
+
+Create the ignored training environment on a drive with enough space and run:
+
+```powershell
+python -m venv .training-venv --system-site-packages
+.\.training-venv\Scripts\python.exe -m pip install -r requirements-training.txt
+.\.training-venv\Scripts\python.exe -m training.train_models `
+  --run-name county-hsp-local-v1-s42 `
+  --seeds 42
+```
+
+The command uses all 33 canonical queries in two rotating folds. Every query is
+held out once, and no expected-evidence clause or protected local context crosses
+from the test fold into training negatives. It mines guarded hard negatives,
+trains both models on CPU, hashes each immutable artifact, builds a separate
+candidate index under `data/trained-indexes/`, and runs both strict end-to-end
+sets with reranking required. Model weights and candidate indexes are ignored;
+the compact JSON/Markdown evaluation reports are retained.
+
+The executed 23 August 2026 run found that training did not improve held-out
+reranked Recall@6 (`0.646` for both pretrained and trained), while pairwise
+reranker ROC AUC decreased from `0.653` to `0.641`. Some secondary metrics
+improved slightly, and the full candidate still passed 18 / 18 core plus 15 / 15
+adversarial cases. Because the sample is small, only one seed was run, and no
+blind staff-query set exists, the trained model remains opt-in and the pretrained
+semantic profile remains recommended. See the complete
+[`model-training report`](evaluation/results/model-training/county-hsp-local-v1-s42/report.md).
 
 ## Optional Gemini phrasing
 
@@ -494,9 +531,11 @@ grounded-answer/
 │   ├── pipeline.py             composition root and fail-safe orchestration
 │   └── llm/                    optional provider interface and Gemini adapter
 ├── evaluation/                 core/adversarial labels, runner, calibration, results
+├── training/                   guarded data building, metrics, and local trainers
 ├── tests/                      automated tests
 ├── requirements.txt            pinned Python dependencies
 ├── requirements-ml.txt         optional local models and reranker
+├── requirements-training.txt   optional local CPU training stack
 ├── requirements-llm.txt        optional Gemini provider
 ├── requirements-tracing.txt    optional LangSmith observability
 ├── requirements-ui.txt         optional Streamlit interface

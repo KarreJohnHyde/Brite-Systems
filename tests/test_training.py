@@ -14,6 +14,7 @@ from training.data import (
     load_training_cases,
 )
 from training.metrics import binary_metrics, ranking_metrics
+from training.train_models import _release_assessment
 
 
 def _expected_ids(cases: list[dict], field: str) -> set[str]:
@@ -263,3 +264,39 @@ def test_toy_binary_metrics_are_exact_and_deterministic() -> None:
         "mean_positive_logit": 0.5,
         "mean_negative_logit": -0.5,
     }
+
+
+def test_release_assessment_keeps_baseline_without_primary_metric_improvement() -> None:
+    ranking = {
+        "recall_at_3": 0.6,
+        "recall_at_6": 0.7,
+        "recall_at_10": 0.8,
+        "mrr": 0.75,
+        "ndcg_at_10": 0.72,
+    }
+    report = {
+        "baseline": {
+            "reranked": ranking,
+            "cross_encoder_binary": {"roc_auc": 0.7},
+        },
+        "cross_validation_summary": {
+            "reranked": {
+                key: {"mean": value + (0.01 if key != "recall_at_6" else 0.0)}
+                for key, value in ranking.items()
+            },
+            "cross_encoder_binary": {"roc_auc": {"mean": 0.65}},
+        },
+        "final_candidate": {
+            "end_to_end": {
+                "core": {"failures": 0},
+                "adversarial": {"failures": 0},
+            }
+        },
+    }
+
+    assessment = _release_assessment(report)
+
+    assert assessment["decision"] == "KEEP_PRETRAINED_BASELINE"
+    assert assessment["candidate_remains_opt_in"] is True
+    assert assessment["held_out_deltas"]["reranked_recall_at_6"] == 0.0
+    assert assessment["held_out_deltas"]["cross_encoder_roc_auc"] == -0.05

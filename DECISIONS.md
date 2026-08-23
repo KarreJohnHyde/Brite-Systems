@@ -77,6 +77,30 @@ five characters, and reranking cannot discard BM25's top lexical candidate.
 These are recall safeguards, not evidence authorization; every result still
 passes independent support assessment.
 
+### 3.1 Local training and promotion decision
+
+**Decision:** Training is limited to the Sentence Transformer bi-encoder and
+CrossEncoder reranker. Do not fine-tune the answer generator from these files:
+the 33 canonical cases contain decisions, evidence IDs, facts, and forbidden
+claims, but no human-authored target answers. Gemini is hosted and outside this
+local training boundary. Hashing, BM25, FAISS `IndexFlatIP`, and deterministic
+safety logic have no learned parameters.
+
+Training uses two rotating, clause-disjoint folds so every query is held out
+once. Hard negatives exclude gold clauses, their section, adjacent clauses,
+cross-references, reverse cross-references, and protected evidence from the
+other fold. Final all-data artifacts are explicitly in-sample candidates, not
+test evidence. Local model directories and their separate FAISS index are
+immutable and SHA-256 bound; required-reranker evaluation fails closed.
+
+The 23 August 2026 seed-42 run kept the pretrained profile as the recommendation.
+Held-out reranked Recall@6 was unchanged at `0.646`; MRR rose only from `0.8359`
+to `0.8369`, while pairwise ROC AUC fell from `0.6535` to `0.6407`. The trained
+candidate passed all 18 core and 15 adversarial end-to-end cases, but this does
+not overcome the small reviewed sample, single seed, and lack of a blind staff
+query set. Candidate promotion requires a new intent-grouped blind set, no safety
+regression, and a material held-out ranking improvement.
+
 ## 4. Evidence decision: relevance is not support
 
 **Decision:** Classify question-to-clause support separately from retrieval as

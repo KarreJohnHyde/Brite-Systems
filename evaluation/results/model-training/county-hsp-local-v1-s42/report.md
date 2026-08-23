@@ -33,6 +33,15 @@ This model was fitted on all reviewed queries. Its values are regression checks,
 - Core end-to-end: 18 passed, 0 failed
 - Adversarial end-to-end: 15 passed, 0 failed
 
+## Release assessment
+
+**Decision:** `KEEP_PRETRAINED_BASELINE`
+
+- Held-out reranked Recall@6 did not improve over the pretrained baseline.
+- Held-out cross-encoder pairwise ROC AUC decreased.
+- All recorded strict end-to-end core and adversarial cases passed.
+- Only 33 reviewed queries and one reproducible seed were available; no blind staff-query set exists.
+
 ## Release decision
 
 Keep this candidate opt-in until it improves held-out ranking without any safety regression and is validated on a newly collected blind staff-query set.

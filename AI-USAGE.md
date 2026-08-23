@@ -52,6 +52,13 @@ include clean-clone checks, dependency/runtime checks, retrieval misses, refusal
 boundary errors, missed conflicts, citation-contract failures, and stale UI or
 provider integrations.
 
+AI also implemented and executed the local retrieval-model training harness. It
+helped design the clause-disjoint folds, guarded hard-negative rules, CPU
+hyperparameters, artifact hashing, and model-level metrics. The resulting
+candidate was not promoted merely because its in-sample and end-to-end regression
+checks passed; the held-out comparison and data limitations remain recorded in
+the model-training report for human release review.
+
 ### Documentation drafting
 
 AI drafted the clean-clone instructions, architecture explanation, ADRs,
