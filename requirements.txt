@@ -1,6 +1,8 @@
 # Pinned core dependency set for CPython 3.11+.
 # Install with: python -m pip install -r requirements.txt
 
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 # Core deterministic pipeline and validated configuration
 numpy==2.4.6
 pydantic==2.13.4
@@ -12,7 +14,7 @@ streamlit==1.62.0
 
 # Optional runtimes exposed by the web interface when configured
 sentence-transformers==6.0.0
-torch==2.13.0
+torch==2.13.0+cpu
 google-genai==2.19.0
 
 # Tests

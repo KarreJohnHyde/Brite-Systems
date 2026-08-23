@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from importlib.util import find_spec
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 from config.settings import Settings
@@ -12,10 +12,11 @@ EMBEDDING_BACKENDS = ("hashing", "sentence-transformers")
 ANSWER_PROVIDERS = ("deterministic", "gemini")
 
 
-def _module_available(module_name: str) -> bool:
+def _distribution_available(distribution_name: str) -> bool:
     try:
-        return find_spec(module_name) is not None
-    except (ImportError, ModuleNotFoundError, ValueError):
+        version(distribution_name)
+        return True
+    except PackageNotFoundError:
         return False
 
 
@@ -23,7 +24,7 @@ def available_embedding_backends() -> list[str]:
     """Return only embedding backends that this installation can execute."""
 
     available = ["hashing"]
-    if _module_available("sentence_transformers"):
+    if _distribution_available("sentence-transformers"):
         available.append("sentence-transformers")
     return available
 
@@ -33,7 +34,7 @@ def available_answer_providers(settings: Settings) -> list[str]:
 
     available = ["deterministic"]
     api_key = (settings.gemini_api_key or "").strip()
-    if api_key and _module_available("google.genai"):
+    if api_key and _distribution_available("google-genai"):
         available.append("gemini")
     return available
 
