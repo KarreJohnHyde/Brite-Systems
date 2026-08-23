@@ -1,8 +1,8 @@
-"""Optional Streamlit interface for The Grounded Answer.
+"""Streamlit interface for The Grounded Answer.
 
 The UI uses the same source-first pipeline and validated PolicyAnswer contract as
-the CLI.  Deterministic generation and stable hashing embeddings are the safe
-defaults; external model use must be selected explicitly.
+the CLI. The public interface is intentionally fixed to deterministic generation
+and stable hashing embeddings so a user cannot select an unavailable runtime.
 """
 
 from __future__ import annotations
@@ -20,10 +20,12 @@ from src.pipeline import GroundedAnswerPipeline, ingest_corpus
 
 
 LOGGER = logging.getLogger("grounded_answer.streamlit")
+PRODUCTION_EMBEDDING_BACKEND = "hashing"
+PRODUCTION_LLM_PROVIDER = "deterministic"
 
 st.set_page_config(
     page_title="The Grounded Answer",
-    page_icon=":material/balance:",
+    page_icon="⚖️",
     layout="centered",
 )
 
@@ -42,11 +44,11 @@ def _render_answer(payload: dict[str, Any]) -> None:
 
     decision = str(payload.get("decision", "REFUSE")).upper()
     if decision == "ANSWER":
-        st.success("ANSWER — directly supported by the policy sources")
+        st.success("⚖️ ANSWER — directly supported by the policy sources")
     elif decision == "CONFLICT":
-        st.warning("CONFLICT — the manual contains incompatible guidance")
+        st.warning("⚖️ CONFLICT — the manual contains incompatible guidance")
     else:
-        st.error("REFUSE — the manual does not safely settle the question")
+        st.error("⚖️ REFUSE — the manual does not safely settle the question")
 
     # Streamlit treats pairs of dollar signs as inline math delimiters. Policy
     # amounts must remain ordinary visible currency in the rendered answer.
@@ -126,7 +128,7 @@ def _load_pipeline(
     return GroundedAnswerPipeline.load(settings)
 
 
-st.title("The Grounded Answer")
+st.title("⚖️ The Grounded Answer")
 st.subheader("Calder County HSP policy evidence assistant")
 st.markdown(
     "This assistant uses only the supplied policy manual and applicable amendments. It chooses **ANSWER**, "
@@ -135,44 +137,16 @@ st.markdown(
 )
 
 try:
-    defaults = Settings.from_env()
+    runtime_settings = Settings.from_env(
+        embedding_backend=PRODUCTION_EMBEDDING_BACKEND,
+        llm_provider=PRODUCTION_LLM_PROVIDER,
+    )
 except (TypeError, ValueError) as exc:
+    LOGGER.exception("The Streamlit configuration is invalid")
     st.error(f"Configuration is invalid: {exc}")
     st.stop()
 
-backend_options = ["hashing", "sentence-transformers"]
-provider_options = ["deterministic", "gemini"]
-
 with st.sidebar:
-    st.header("Runtime mode")
-    embedding_backend = st.selectbox(
-        "Embedding backend",
-        backend_options,
-        index=backend_options.index(defaults.embedding_backend),
-        help="Hashing is local and reproducible. Sentence Transformers downloads and runs MiniLM locally.",
-    )
-    provider = st.selectbox(
-        "Answer phrasing",
-        provider_options,
-        index=provider_options.index(defaults.llm_provider),
-        help="Deterministic keeps all query processing local. Gemini sends selected excerpts to the configured API.",
-    )
-    reranking_slot = st.empty()
-    reranking_slot.caption(
-        "Reranking is configured; runtime availability will be checked while the index loads."
-        if defaults.enable_reranking
-        else "Reranking is disabled through ENABLE_RERANKING."
-    )
-    if defaults.langsmith_tracing:
-        st.caption(
-            f"LangSmith tracing is on for project `{defaults.langsmith_project}`. "
-            "Questions, answers, reasons, next steps, and policy text are not recorded."
-        )
-    if st.button("Clear conversation", icon=":material/delete_sweep:"):
-        st.session_state.messages = []
-        st.rerun()
-
-    st.divider()
     st.header("Case context")
     use_case_date = st.toggle("Use a case date", value=False)
     date_basis = "Change occurred"
@@ -189,42 +163,26 @@ with st.sidebar:
             max_value=date(2100, 12, 31),
             format="DD/MM/YYYY",
         )
+    if st.button("Clear conversation", icon=":material/delete_sweep:"):
+        st.session_state.messages = []
+        st.rerun()
+    st.badge("Verified policy mode", icon=":material/verified:", color="green")
 
 try:
-    runtime_settings = Settings.from_env(
-        embedding_backend=embedding_backend,
-        llm_provider=provider,
-    )
     pipeline = _load_pipeline(
-        embedding_backend,
-        provider,
+        PRODUCTION_EMBEDDING_BACKEND,
+        PRODUCTION_LLM_PROVIDER,
         _artifact_revision(runtime_settings),
     )
 except (FileNotFoundError, ImportError, RuntimeError, ValueError) as exc:
-    st.error(str(exc))
-    st.code(
-        f"python main.py ingest --embedding-backend {embedding_backend}",
-        language="powershell",
+    LOGGER.exception("The verified policy runtime could not be loaded: %s", exc)
+    st.error(
+        "The verified policy sources could not be loaded safely. Please try again later."
     )
-    if provider == "gemini":
-        st.caption("Gemini additionally requires GEMINI_API_KEY in .env or the process environment.")
     st.stop()
 
 manual_chunks = [chunk for chunk in pipeline.store.chunks if chunk.source_kind == "manual"]
 amendment_chunks = [chunk for chunk in pipeline.store.chunks if chunk.source_kind == "amendment"]
-if not runtime_settings.enable_reranking:
-    reranking_runtime = "Reranking is disabled through ENABLE_RERANKING."
-elif pipeline.retriever.reranker is None or pipeline.retriever.reranker_error:
-    reranking_runtime = (
-        "Reranking is configured but unavailable; hybrid vector/BM25 retrieval remains active."
-    )
-else:
-    reranking_runtime = "Reranking is loaded and active."
-reranking_slot.caption(
-    reranking_runtime
-    + " Restart Streamlit after editing .env. The selected embedding backend must match "
-    "the backend used for ingestion."
-)
 active_manual = manual_chunks[0] if manual_chunks else pipeline.store.chunks[0]
 version = active_manual.document_version or "version not stated"
 amendment_caption = (
@@ -243,7 +201,8 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
+    avatar = "⚖️" if message["role"] == "assistant" else None
+    with st.chat_message(message["role"], avatar=avatar):
         if message["role"] == "user":
             st.markdown(message["content"])
         else:
@@ -271,7 +230,7 @@ if prompt := st.chat_input(
     with st.chat_message("user"):
         st.markdown(display_prompt)
 
-    with st.chat_message("assistant"):
+    with st.chat_message("assistant", avatar="⚖️"):
         try:
             started = time.perf_counter()
             with st.spinner("Retrieving and checking policy evidence…"):
@@ -279,11 +238,6 @@ if prompt := st.chat_input(
                     prompt,
                     change_date=change_date,
                     determination_date=determination_date,
-                )
-            if pipeline.retriever.reranker_error:
-                reranking_slot.caption(
-                    "Reranking encountered a runtime error; hybrid vector/BM25 retrieval remains active. "
-                    "Restart Streamlit after editing .env."
                 )
             elapsed = time.perf_counter() - started
             payload = answer.model_dump(mode="json")
@@ -294,7 +248,7 @@ if prompt := st.chat_input(
             LOGGER.exception("The Streamlit request failed safely")
             st.error(
                 "The request could not be completed safely, so no policy answer was shown. "
-                "Check the server log and confirm that the index matches the selected backend."
+                "Please try again later."
             )
 
 st.caption(

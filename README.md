@@ -524,18 +524,17 @@ This repository can be deployed directly with these settings:
 | Main file path | `app.py` |
 | Python | `3.11` or newer |
 
-The default hashing/deterministic mode needs no secrets. Optional Gemini mode
-requires `GEMINI_API_KEY` and `LLM_PROVIDER=gemini` in the app's Streamlit
-secrets or environment. Community Cloud installs the root `requirements.txt`,
-which includes the pinned Streamlit runtime.
+The web interface uses the audited hashing/deterministic profile and needs no
+secrets. Community Cloud installs the root `requirements.txt`, which includes
+the pinned Streamlit runtime. Optional model-backed modes remain available to
+the CLI for controlled evaluation, but are not user-selectable in the public
+benefits interface.
 
-The sidebar selects the embedding backend and answer provider. Its backend must
-match the index built by `ingest`. The page displays the active base manual and
-amendment metadata. Its cached pipeline key includes the source bundle, policy
-timeline, index manifest, reviewed findings, and contact metadata, so a quarterly
-change cannot keep serving an old in-memory pipeline. Restart Streamlit after
-editing unrelated runtime-only `.env` settings. The CLI is the canonical
-interface for evaluation and reproducibility.
+The sidebar collects only relevant case-date context. The page displays the
+active base manual and amendment metadata. Its cached pipeline key includes the
+source bundle, policy timeline, index manifest, reviewed findings, and contact
+metadata, so a quarterly change cannot keep serving an old in-memory pipeline.
+The CLI is the canonical interface for evaluation and reproducibility.
 
 ## Privacy and security
 
