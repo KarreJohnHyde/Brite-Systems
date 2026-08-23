@@ -97,15 +97,17 @@ class Settings(BaseModel):
             raw = os.getenv(name)
             return Path(raw).expanduser().resolve() if raw else root / relative
 
+        _backend = embedding_backend or os.getenv("EMBEDDING_BACKEND", "hashing")
+
         data: dict[str, object] = {
             "project_root": root,
             "corpus_path": Path(corpus_path).resolve() if corpus_path else path_env("CORPUS_PATH", "data/policy-manual.md"),
             "processed_path": path_env("PROCESSED_PATH", "data/processed/chunks.json"),
             "corpus_report_path": path_env("CORPUS_REPORT_PATH", "data/processed/corpus-report.json"),
-            "index_dir": path_env("INDEX_DIR", "data/indexes"),
+            "index_dir": path_env("INDEX_DIR", f"data/indexes/{_backend}"),
             "findings_path": path_env("POLICY_FINDINGS_PATH", "data/policy_findings.json"),
             "contacts_path": path_env("CONTACTS_PATH", "data/contacts.json"),
-            "embedding_backend": embedding_backend or os.getenv("EMBEDDING_BACKEND", "hashing"),
+            "embedding_backend": _backend,
             "embedding_model": os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"),
             "embedding_dimension": int(os.getenv("EMBEDDING_DIMENSION", "768")),
             "reranker_model": os.getenv("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
