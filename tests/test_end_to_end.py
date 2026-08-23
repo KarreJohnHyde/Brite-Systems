@@ -17,16 +17,15 @@ def test_supported_question_returns_answer_with_exact_citation(pipeline) -> None
     assert answer.trace.decision == Decision.ANSWER
 
 
-def test_reporting_deadline_returns_conflict_with_both_sources(pipeline) -> None:
+def test_reporting_deadline_uses_specific_obligation_clause(pipeline) -> None:
     answer = pipeline.ask(
         "How many days does a recipient have to report a change of circumstances?"
     )
 
-    assert answer.decision == Decision.CONFLICT
-    assert {citation.clause_id for citation in answer.citations} == {"4.3.2", "9.1.4"}
+    assert answer.decision == Decision.ANSWER
+    assert {citation.clause_id for citation in answer.citations} == {"4.3.2"}
     assert "10 calendar days" in answer.answer
-    assert "30 calendar days" in answer.answer
-    assert answer.next_step
+    assert "30 calendar days" not in answer.answer
 
 
 @pytest.mark.parametrize(

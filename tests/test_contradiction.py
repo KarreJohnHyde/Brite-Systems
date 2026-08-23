@@ -26,13 +26,29 @@ def test_curated_reporting_deadline_conflict_is_detected(
     retrieved = [make_result(chunk) for chunk in chunks if chunk.clause_id in wanted]
 
     findings = ContradictionDetector(findings_path).detect(
-        "How many days do I have to report a change of circumstances?",
+        "Do the reporting duty and overpayment protection use the same deadline?",
         retrieved
     )
 
     assert len(findings) == 1
     assert findings[0].basis == "CURATED"
     assert set(findings[0].clause_ids) == wanted
+
+
+def test_direct_reporting_duty_does_not_trigger_overpayment_conflict(
+    chunks,
+    findings_path: Path,
+    make_result,
+) -> None:
+    wanted = {"4.3.2", "9.1.4"}
+    retrieved = [make_result(chunk) for chunk in chunks if chunk.clause_id in wanted]
+
+    findings = ContradictionDetector(findings_path).detect(
+        "How many days do I have to report an income change?",
+        retrieved,
+    )
+
+    assert findings == []
 
 
 def test_numeric_cross_reference_conflict_is_detected(make_chunk, make_result) -> None:

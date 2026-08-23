@@ -64,27 +64,35 @@ base manual + effective amendment
 clause / amendment parser ──► exact chunks + source-bundle digest
               │
               ▼
-timeline validation + temporal policy resolver
+hybrid search index ◄──── dense + lexical representations
               │
-question ─► date/fact extraction ─► temporal resolver
-                                      ├─ decisive date rule ───┐
-                                      └─ retrieval needed ──► dense + lexical search
-                                                                │
-                                                                ▼
-                                                     optional local reranker
-                                                                │
-                                                                ▼
-                                             evidence + contradiction / gap checks
-                                                                │
-                                                                ▼
-                                                   ANSWER │ CONFLICT │ REFUSE
-                                      └─────────────────────────┘
-                                                    │
-                                                    ▼
-                              deterministic answer builder or optional Gemini phrasing
-                                                    │
-                                                    ▼
-                                   citation and claim validation
+question + optional case date
+              │
+              ▼
+query normalization + date / fact extraction
+              │
+              ▼
+hybrid clause retrieval + optional local reranker
+              │
+              ▼
+source-verified temporal policy resolution
+              │
+              ▼
+evidence + contradiction / gap checks
+              │
+              ▼
+       evidence sufficient?
+          ├─ yes ─► ANSWER or CONFLICT
+          └─ no  ─► REFUSE + who to ask
+                         │
+                         ▼
+deterministic answer builder or optional Gemini phrasing
+                         │
+                         ▼
+claim, policy-version, and citation validation
+                         │
+                         ▼
+                  CLI / Streamlit response
 ```
 
 The default path uses stable local hashing embeddings, lexical retrieval,
@@ -218,6 +226,18 @@ python main.py ask "What is the household resource limit?" --debug
 python main.py ask "What is the household resource limit?" --json
 ```
 
+Supply the legally controlling date as structured case context when it is not
+written in the question:
+
+```powershell
+python main.py ask "How many days do I have to report an income change?" --change-date 2026-02-15
+python main.py ask "How many days do I have to report an income change?" --change-date 2026-04-15
+python main.py ask "What earnings disregard applies?" --determination-date 2026-04-15
+```
+
+Structured dates use ISO `YYYY-MM-DD`. If a structured date conflicts with a
+date written in the question, the request fails safely instead of choosing one.
+
 Look up exact source text by official clause ID, section ID, amendment paragraph,
 or opaque chunk ID:
 
@@ -242,6 +262,8 @@ python main.py interactive --embedding-backend hashing
 
 The interactive and Streamlit histories are display conveniences. Each question
 is evaluated independently; prior messages do not become policy evidence.
+Streamlit provides the same optional change-date or determination-date context
+in its sidebar.
 
 ### Date-sensitive examples
 
@@ -253,7 +275,8 @@ date, give the period bounds.
 ```powershell
 python main.py ask "For a determination on 28 February 2026, what monthly earnings disregard applies?"
 python main.py ask "For a determination on 1 March 2026, what monthly earnings disregard applies?"
-python main.py ask "A change occurred on 15 March 2026. How long did the recipient have to report it?"
+python main.py ask "How many days do I have to report an income change?" --change-date 2026-02-15
+python main.py ask "How many days do I have to report an income change?" --change-date 2026-04-15
 python main.py ask "How should a claim from 20 February 2026 through 10 March 2026 be treated?"
 ```
 
@@ -326,16 +349,17 @@ generalization beyond the supplied sources and the recorded cases.
 python main.py ingest --embedding-backend hashing
 python main.py ask "What is the household resource limit?"
 python main.py ask "How is the needs figure calculated for a full-time student?"
-python main.py ask "A change occurred on 15 February 2026. How many days did the recipient have to report it?"
-python main.py ask "A change occurred on 15 March 2026. How many days did the recipient have to report it?"
+python main.py ask "How many days do I have to report an income change?" --change-date 2026-02-15
+python main.py ask "How many days do I have to report an income change?" --change-date 2026-04-15
+python main.py ask "For a change on 15 February 2026, do the reporting duty and overpayment protection agree?"
 python main.py source 4.3.2
 python main.py source "Amendment No. 2026-01 ¶2.1"
 python main.py evaluate --embedding-backend hashing --quiet
 python -m pytest -q
 ```
 
-These questions exercise supported, policy-gap/refusal, historical-conflict, and
-post-effective amendment paths. Example output shape is:
+These questions exercise supported, policy-gap/refusal, historical reporting,
+and post-effective amendment paths. Example output shape is:
 
 ```text
 STATUS: ANSWER | CONFLICT | REFUSE
@@ -520,11 +544,16 @@ interface for evaluation and reproducibility.
 The base manual intentionally contains issues that must remain visible. The
 amendment changes their treatment only where it expressly says so:
 
-- **Reporting deadline conflict, before 1 March 2026:** §4.3.2 says 10 calendar
-  days, while §9.1.4 describes 30 calendar days as required under §4.3. Under
-  amendment ¶5.2, a change that occurred before the effective date keeps the
-  historical period, but the amendment does not choose between those two base
-  provisions. The safe result remains `CONFLICT`.
+- **Reporting duty, before 1 March 2026:** §4.3.2 specifically requires a change
+  to be reported within 10 calendar days, measured from occurrence or awareness,
+  whichever is later. Amendment ¶5.2 preserves that period for a pre-effective
+  change. A direct reporting-duty question therefore returns `ANSWER` with 10
+  days.
+- **Historical overpayment wording conflict:** §9.1.4 separately describes 30
+  calendar days as the period required under §4.3 for overpayment protection.
+  That does not replace the specific duty in §4.3.2. A question about
+  overpayment protection or whether the provisions agree returns `CONFLICT` and
+  shows both clauses.
 - **Reporting deadline, on or after 1 March 2026:** amendment ¶¶2.1 and 2.2
   substitutes 14 calendar days in both provisions. The event date—not the later
   determination date—controls under ¶5.2.

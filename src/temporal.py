@@ -3,15 +3,16 @@
 The amendment is legal source text, not a replacement manual.  This module
 keeps both source documents immutable, selects the applicable rule from the
 question's dates, and cites every raw provision used to reach that selection.
-It intentionally runs before statistical retrieval so obsolete and amended
-figures are never treated as an unresolved semantic-retrieval clash.
+It runs after query/date extraction and hybrid retrieval, then replaces any
+date-sensitive candidate view with source-verified applicability so obsolete
+and amended figures are never treated as an unresolved retrieval clash.
 """
 
 from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from enum import Enum
 from pathlib import Path
@@ -165,7 +166,7 @@ DETERMINATION_CUES = re.compile(
     re.IGNORECASE,
 )
 CHANGE_CUES = re.compile(
-    r"\b(change\s+(?:occurred|happened|took place|date|dated)|"
+    r"\b(change\s+(?:that\s+)?(?:occurred|happened|took place|date|dated|on)|"
     r"circumstances\s+changed|changed\s+on)\b",
     re.IGNORECASE,
 )
@@ -195,6 +196,11 @@ REPORTING_TOPIC_RE = re.compile(
     re.IGNORECASE,
 )
 REPORT_ACTION_RE = re.compile(r"\breport(?:s|ed|ing)?\b", re.IGNORECASE)
+REPORTING_OVERPAYMENT_RE = re.compile(
+    r"\b(overpayment|recover(?:y|able)|protection|conflict|inconsisten(?:t|cy)|"
+    r"9\.1\.4|10\s*(?:or|versus|vs\.?)\s*30|department\b.{0,30}\b(?:act|position))\b",
+    re.IGNORECASE,
+)
 SANCTION_RATE_RE = re.compile(
     r"\b(sanction\b.{0,30}\b(?:rate|percent|percentage|amount|how much|reduction)|"
     r"(?:percent|percentage)\b.{0,20}\bsanction)\b",
@@ -503,10 +509,19 @@ class TemporalPolicyResolver:
         question: str,
         *,
         include_trace: bool = False,
+        change_date: date | None = None,
+        determination_date: date | None = None,
+        context: TemporalContext | None = None,
     ) -> PolicyAnswer | None:
         if not self.enabled:
             return None
-        context = extract_temporal_context(question)
+        if context is not None and (change_date is not None or determination_date is not None):
+            raise ValueError("Pass either a prepared temporal context or explicit dates, not both")
+        context = context or self.build_context(
+            question,
+            change_date=change_date,
+            determination_date=determination_date,
+        )
         topic = self._topic(question)
         # Staff often say "a claim period from … through …" instead of using
         # the word "spanning".  Once two dates and a claim-period cue show that
@@ -541,6 +556,41 @@ class TemporalPolicyResolver:
                 question, context, include_trace=include_trace
             )
         return None
+
+    @staticmethod
+    def build_context(
+        question: str,
+        *,
+        change_date: date | None = None,
+        determination_date: date | None = None,
+    ) -> TemporalContext:
+        context = extract_temporal_context(question)
+        if (change_date is not None or determination_date is not None) and context.ambiguous_numeric_date:
+            raise ValueError(
+                "The question contains an ambiguous numeric date. Remove it or write it with "
+                "the month in words before using structured date context."
+            )
+        if (
+            change_date is not None
+            and context.change_date is not None
+            and context.change_date != change_date
+        ):
+            raise ValueError(
+                "The structured change date conflicts with the change date written in the question."
+            )
+        if (
+            determination_date is not None
+            and context.determination_date is not None
+            and context.determination_date != determination_date
+        ):
+            raise ValueError(
+                "The structured determination date conflicts with the determination date written in the question."
+            )
+        return replace(
+            context,
+            change_date=change_date or context.change_date,
+            determination_date=determination_date or context.determination_date,
+        )
 
     def _crosses_effective_date(self, context: TemporalContext) -> bool:
         if context.period_start is None or context.period_end is None:
@@ -872,7 +922,7 @@ class TemporalPolicyResolver:
         *,
         include_trace: bool,
     ) -> PolicyAnswer:
-        sources = self._raw_sources(
+        all_sources = self._raw_sources(
             manual_ids=("4.3.2", "9.1.4", "1.3.2"),
             amendment_ids=("2.1", "2.2", "5.2"),
         )
@@ -883,10 +933,11 @@ class TemporalPolicyResolver:
             return self._missing_date(
                 question=question,
                 basis=TemporalBasis.CHANGE_DATE,
-                chunks=sources,
+                chunks=all_sources,
                 include_trace=include_trace,
             )
-        if change_date < self.timeline.effective_date:
+        overpayment_scope = bool(REPORTING_OVERPAYMENT_RE.search(question))
+        if change_date < self.timeline.effective_date and overpayment_scope:
             left = self.manual["4.3.2"]
             right = self.manual["9.1.4"]
             finding = ConflictFinding(
@@ -914,26 +965,67 @@ class TemporalPolicyResolver:
                     "deadline for this pre-March change."
                 ),
                 reason=finding.explanation,
-                chunks=sources,
+                chunks=all_sources,
                 next_step=str(self.contacts["conflict"]["next_step"]),
                 include_trace=include_trace,
                 conflicts=[finding],
+            )
+
+        direct_sources = self._raw_sources(
+            manual_ids=("4.3.2", "1.3.2"),
+            amendment_ids=("2.1", "5.2"),
+        )
+        if change_date < self.timeline.effective_date:
+            anchor = context.awareness_date if (
+                context.awareness_date is not None and context.awareness_date > change_date
+            ) else change_date
+            answer = (
+                f"For a change of circumstances that occurred on {_format_date(change_date)}, "
+                "the recipient must report it within 10 calendar days. The 10 days run from "
+                "the later of the date the change occurred and the date the recipient became "
+                "aware of it"
+            )
+            if context.awareness_date is not None:
+                answer += f"; on the dates supplied, that starting point is {_format_date(anchor)}"
+            answer += (
+                ". If the last day falls when the district office is closed, the period ends "
+                "on the next day the office is open."
+            )
+            return self._answer(
+                question=question,
+                decision=Decision.ANSWER,
+                answer=answer,
+                reason=(
+                    "Section 4.3.2 is the specific reporting-obligation clause, and amendment "
+                    "paragraph 5.2 preserves the reporting period in force on the date of a "
+                    "pre-1-March-2026 change."
+                ),
+                chunks=direct_sources,
+                include_trace=include_trace,
             )
 
         anchor = context.awareness_date if (
             context.awareness_date is not None and context.awareness_date > change_date
         ) else change_date
         answer = (
-            f"Because the change occurred on {_format_date(change_date)}, it is subject to "
-            "the amended 14-calendar-day rule. The 14 days run from the later of the date "
+            f"For a change of circumstances that occurred on {_format_date(change_date)}, "
+            "the recipient must report it within 14 calendar days. The 14 days run from "
+            "the later of the date "
             f"the change occurred and the date the recipient became aware of it"
         )
         if context.awareness_date is not None:
             answer += f"; on the dates supplied, that starting point is {_format_date(anchor)}"
         answer += (
-            ". The aligned overpayment provision also uses 14 calendar days for changes "
-            "on or after 1 March 2026."
+            ". If the last day falls when the district office is closed, the period ends "
+            "on the next day the office is open."
         )
+        sources = direct_sources
+        if overpayment_scope:
+            answer += (
+                " The aligned overpayment provision also uses 14 calendar days for changes "
+                "on or after 1 March 2026."
+            )
+            sources = all_sources
         return self._answer(
             question=question,
             decision=Decision.ANSWER,

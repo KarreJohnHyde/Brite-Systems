@@ -51,9 +51,9 @@ def test_household_resource_limit(temporal_pipeline: GroundedAnswerPipeline):
 
 def test_reporting_period_before_amendment(temporal_pipeline: GroundedAnswerPipeline):
     answer = temporal_pipeline.ask("How many days do I have to report a change that happened on 15 February 2026?")
-    assert answer.decision == Decision.CONFLICT
+    assert answer.decision == Decision.ANSWER
     assert "10" in answer.answer
-    assert "30" in answer.answer
+    assert "30" not in answer.answer
 
 def test_reporting_period_after_amendment(temporal_pipeline: GroundedAnswerPipeline):
     answer = temporal_pipeline.ask("How many days do I have to report a change that happened on 15 March 2026?")

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 
 from config.settings import Settings
@@ -65,11 +67,11 @@ def test_reporting_deadline_uses_change_date_transition(temporal_pipeline) -> No
         "How many days do I have to report a change that happened on 15 March 2026?"
     )
 
-    assert pre.decision == Decision.CONFLICT
+    assert pre.decision == Decision.ANSWER
     assert "10 calendar days" in pre.answer
-    assert "30 calendar days" in pre.answer
+    assert "30 calendar days" not in pre.answer
     assert post.decision == Decision.ANSWER
-    assert "14-calendar-day" in post.answer
+    assert "14 calendar days" in post.answer
     assert "Amendment No. 2026-01 ¶5.2" in {
         citation.source_locator_label for citation in post.citations
     }
@@ -83,12 +85,46 @@ def test_reporting_deadline_handles_sentence_separated_pronoun(temporal_pipeline
         "A change occurred on 15 March 2026. How many days did the recipient have to report it?"
     )
 
-    assert pre.decision == Decision.CONFLICT
+    assert pre.decision == Decision.ANSWER
     assert "10 calendar days" in pre.answer
-    assert "30 calendar days" in pre.answer
+    assert "30 calendar days" not in pre.answer
     assert post.decision == Decision.ANSWER
-    assert "14-calendar-day" in post.answer
+    assert "14 calendar days" in post.answer
     assert "§None" not in pre.answer + post.answer
+
+
+def test_reporting_deadline_accepts_structured_change_date(temporal_pipeline) -> None:
+    question = "How many days do I have to report an income change?"
+
+    before = temporal_pipeline.ask(question, change_date=date(2026, 2, 15))
+    after = temporal_pipeline.ask(question, change_date=date(2026, 4, 15))
+
+    assert before.decision == Decision.ANSWER
+    assert "10 calendar days" in before.answer
+    assert after.decision == Decision.ANSWER
+    assert "14 calendar days" in after.answer
+
+
+def test_structured_change_date_cannot_conflict_with_question(temporal_pipeline) -> None:
+    with pytest.raises(ValueError, match="structured change date conflicts"):
+        temporal_pipeline.ask(
+            "How long do I have to report a change that occurred on 15 February 2026?",
+            change_date=date(2026, 4, 15),
+        )
+
+
+def test_pre_amendment_overpayment_wording_still_surfaces_conflict(
+    temporal_pipeline,
+) -> None:
+    answer = temporal_pipeline.ask(
+        "For an income change that occurred on 15 February 2026, do the reporting "
+        "duty and overpayment protection use the same deadline?"
+    )
+
+    assert answer.decision == Decision.CONFLICT
+    assert "10 calendar days" in answer.answer
+    assert "30 calendar days" in answer.answer
+    assert answer.next_step
 
 
 def test_missing_temporal_date_refuses_instead_of_guessing(temporal_pipeline) -> None:

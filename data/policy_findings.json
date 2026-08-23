@@ -30,13 +30,13 @@
         "30 calendar days"
       ],
       "trigger_patterns": [
-        "report.*change.*(?:day|deadline|time)",
-        "change.*report.*(?:day|deadline|time)",
-        "how many.*report.*change",
-        "failure to report.*(?:day|deadline|time)"
+        "overpayment.*(?:report|change|day|deadline|time)",
+        "(?:report|change).*(?:overpayment|recoverable|protection)",
+        "(?:conflict|inconsisten|10.*30|30.*10).*(?:report|change|day|deadline)",
+        "9\\.1\\.4"
       ],
       "temporal_scope": "A change of circumstances occurring before 1 March 2026. Amendment No. 2026-01 paragraphs 2.1, 2.2, and 5.2 align both figures at 14 days only for changes occurring on or after that date.",
-      "explanation": "For a change occurring before 1 March 2026, clause 4.3.2 requires reporting within 10 calendar days, while clause 9.1.4 describes 30 calendar days as the period required under section 4.3. The pre-amendment manual supplies no precedence rule that resolves the two deadlines.",
+      "explanation": "For a change occurring before 1 March 2026, clause 4.3.2 sets the reporting obligation at 10 calendar days, while clause 9.1.4 describes 30 calendar days as the period required under section 4.3 for overpayment protection. A direct reporting-duty question is answered from the specific obligation in clause 4.3.2; a question about overpayment protection or the inconsistency must surface both provisions.",
       "source_verified": true
     },
     {

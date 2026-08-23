@@ -1,6 +1,6 @@
 # Evaluation Results — The Grounded Answer
 
-**Generated (UTC):** 2026-08-23T10:29:39.425573+00:00
+**Generated (UTC):** 2026-08-23T10:54:11.840447+00:00
 **Run type:** `strict_end_to_end`
 **Corpus SHA-256:** `225267869bb2b02536fe59f4d73c53106305460127bdf0f15fd4a5bce796cbca`
 **Embedding backend:** `hashing`
@@ -11,18 +11,18 @@
 
 | Metric | Result |
 | :-- | --: |
-| Strict cases passed | 16 / 16 (100.0%) |
-| Decision accuracy | 16 / 16 (100.0%) |
-| ANSWER decision precision / recall | 100.0% / 100.0% (10 correct) |
+| Strict cases passed | 17 / 17 (100.0%) |
+| Decision accuracy | 17 / 17 (100.0%) |
+| ANSWER decision precision / recall | 100.0% / 100.0% (12 correct) |
 | REFUSE decision precision / recall | 100.0% / 100.0% (4 correct) |
-| CONFLICT decision precision / recall | 100.0% / 100.0% (2 correct) |
-| Expected evidence retrieval | 25 / 25 (100.0%) |
-| Required citation recall | 18 / 18 (100.0%) |
-| Required amendment/source citation recall | 27 / 27 (100.0%) |
-| Citation integrity | 16 / 16 (100.0%) |
-| Expected fact recall | 28 / 28 (100.0%) |
-| Unsupported-claim safety | 16 / 16 (100.0%) |
-| False answers on REFUSE/CONFLICT cases | 0 / 6 (0.0%) |
+| CONFLICT decision precision / recall | 100.0% / 100.0% (1 correct) |
+| Expected evidence retrieval | 27 / 27 (100.0%) |
+| Required citation recall | 20 / 20 (100.0%) |
+| Required amendment/source citation recall | 26 / 26 (100.0%) |
+| Citation integrity | 17 / 17 (100.0%) |
+| Expected fact recall | 29 / 29 (100.0%) |
+| Unsupported-claim safety | 17 / 17 (100.0%) |
+| False answers on REFUSE/CONFLICT cases | 0 / 5 (0.0%) |
 
 ## Requirement summary
 
@@ -56,7 +56,7 @@ No failures.
 | T01 | TEMPORAL_BEFORE_EFFECTIVE_DATE | ANSWER | ANSWER | PASS | PASS | PASS | PASS | PASS | — |
 | T02 | TEMPORAL_AFTER_EFFECTIVE_DATE | ANSWER | ANSWER | PASS | PASS | PASS | PASS | PASS | — |
 | T03 | MISSING_DETERMINATION_DATE | REFUSE | REFUSE | PASS | PASS | PASS | PASS | PASS | — |
-| T04 | PRE_AMENDMENT_CONFLICT | CONFLICT | CONFLICT | PASS | PASS | PASS | PASS | PASS | — |
+| T04 | PRE_AMENDMENT_REPORTING | ANSWER | ANSWER | PASS | PASS | PASS | PASS | PASS | — |
 | T05 | POST_AMENDMENT_REPORTING | ANSWER | ANSWER | PASS | PASS | PASS | PASS | PASS | — |
 | T06 | MISSING_CHANGE_DATE | REFUSE | REFUSE | PASS | PASS | PASS | PASS | PASS | — |
 | T07 | TEMPORAL_THRESHOLD_BEFORE | ANSWER | ANSWER | PASS | PASS | PASS | PASS | PASS | — |
@@ -67,8 +67,9 @@ No failures.
 | T12 | INSERTED_PROTECTION_BEFORE | REFUSE | REFUSE | PASS | PASS | PASS | PASS | PASS | — |
 | T13 | SPANNING_CLAIM_PERIOD | ANSWER | ANSWER | PASS | PASS | PASS | PASS | PASS | — |
 | T14 | AMBIGUOUS_NUMERIC_DATE | REFUSE | REFUSE | PASS | PASS | PASS | PASS | PASS | — |
-| T15 | PRE_AMENDMENT_PRONOUN_REPORTING | CONFLICT | CONFLICT | PASS | PASS | PASS | PASS | PASS | — |
+| T15 | PRE_AMENDMENT_PRONOUN_REPORTING | ANSWER | ANSWER | PASS | PASS | PASS | PASS | PASS | — |
 | T16 | POST_AMENDMENT_PRONOUN_REPORTING | ANSWER | ANSWER | PASS | PASS | PASS | PASS | PASS | — |
+| T17 | PRE_AMENDMENT_OVERPAYMENT_CONFLICT | CONFLICT | CONFLICT | PASS | PASS | PASS | PASS | PASS | — |
 
 ## Full case results
 
@@ -142,10 +143,10 @@ I don't know based on the current policy sources which version of the rule appli
 
 How many days do I have to report a change that happened on 15 February 2026?
 
-- Expected / actual: `CONFLICT` / `CONFLICT`
-- Retrieved clauses: `4.3.2`, `9.1.4`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_15069ec01b993014`, `chunk_f3d0f57cbfd0b703`
-- Cited clauses: `4.3.2`, `9.1.4`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_15069ec01b993014`, `chunk_f3d0f57cbfd0b703`
-- Cited source locators: `manual:4.3.2`, `manual:9.1.4`, `manual:1.3.2`, `amendment-2026-01:2.1`, `amendment-2026-01:2.2`, `amendment-2026-01:5.2`
+- Expected / actual: `ANSWER` / `ANSWER`
+- Retrieved clauses: `4.3.2`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_f3d0f57cbfd0b703`
+- Cited clauses: `4.3.2`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_f3d0f57cbfd0b703`
+- Cited source locators: `manual:4.3.2`, `manual:1.3.2`, `amendment-2026-01:2.1`, `amendment-2026-01:5.2`
 - Missing evidence: none
 - Missing citations: none
 - Missing source-locator evidence: none
@@ -157,7 +158,7 @@ How many days do I have to report a change that happened on 15 February 2026?
 #### Complete answer (T04)
 
 ```text
-The change occurred on 15 February 2026, so the pre-amendment wording remains applicable. Section 4.3.2 says the change must be reported within 10 calendar days of the change or awareness, whichever is later. Section 9.1.4 instead describes 30 calendar days as the period required under §4.3 for its overpayment protection. The amendment does not retroactively align those provisions, so I cannot give one conflict-free deadline for this pre-March change.
+For a change of circumstances that occurred on 15 February 2026, the recipient must report it within 10 calendar days. The 10 days run from the later of the date the change occurred and the date the recipient became aware of it. If the last day falls when the district office is closed, the period ends on the next day the office is open.
 ```
 
 ### T05 — PASS
@@ -165,9 +166,9 @@ The change occurred on 15 February 2026, so the pre-amendment wording remains ap
 How many days do I have to report a change that happened on 15 March 2026?
 
 - Expected / actual: `ANSWER` / `ANSWER`
-- Retrieved clauses: `4.3.2`, `9.1.4`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_15069ec01b993014`, `chunk_f3d0f57cbfd0b703`
-- Cited clauses: `4.3.2`, `9.1.4`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_15069ec01b993014`, `chunk_f3d0f57cbfd0b703`
-- Cited source locators: `manual:4.3.2`, `manual:9.1.4`, `manual:1.3.2`, `amendment-2026-01:2.1`, `amendment-2026-01:2.2`, `amendment-2026-01:5.2`
+- Retrieved clauses: `4.3.2`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_f3d0f57cbfd0b703`
+- Cited clauses: `4.3.2`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_f3d0f57cbfd0b703`
+- Cited source locators: `manual:4.3.2`, `manual:1.3.2`, `amendment-2026-01:2.1`, `amendment-2026-01:5.2`
 - Missing evidence: none
 - Missing citations: none
 - Missing source-locator evidence: none
@@ -179,7 +180,7 @@ How many days do I have to report a change that happened on 15 March 2026?
 #### Complete answer (T05)
 
 ```text
-Because the change occurred on 15 March 2026, it is subject to the amended 14-calendar-day rule. The 14 days run from the later of the date the change occurred and the date the recipient became aware of it. The aligned overpayment provision also uses 14 calendar days for changes on or after 1 March 2026.
+For a change of circumstances that occurred on 15 March 2026, the recipient must report it within 14 calendar days. The 14 days run from the later of the date the change occurred and the date the recipient became aware of it. If the last day falls when the district office is closed, the period ends on the next day the office is open.
 ```
 
 ### T06 — PASS
@@ -384,6 +385,50 @@ I don't know based on the current policy sources which version of the rule appli
 
 A change occurred on 15 February 2026. How many days did the recipient have to report it?
 
+- Expected / actual: `ANSWER` / `ANSWER`
+- Retrieved clauses: `4.3.2`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_f3d0f57cbfd0b703`
+- Cited clauses: `4.3.2`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_f3d0f57cbfd0b703`
+- Cited source locators: `manual:4.3.2`, `manual:1.3.2`, `amendment-2026-01:2.1`, `amendment-2026-01:5.2`
+- Missing evidence: none
+- Missing citations: none
+- Missing source-locator evidence: none
+- Missing source-locator citations: none
+- Missing facts: none
+- Forbidden claims found: none
+- Failure taxonomy: none
+
+#### Complete answer (T15)
+
+```text
+For a change of circumstances that occurred on 15 February 2026, the recipient must report it within 10 calendar days. The 10 days run from the later of the date the change occurred and the date the recipient became aware of it. If the last day falls when the district office is closed, the period ends on the next day the office is open.
+```
+
+### T16 — PASS
+
+A change occurred on 15 March 2026. How many days did the recipient have to report it?
+
+- Expected / actual: `ANSWER` / `ANSWER`
+- Retrieved clauses: `4.3.2`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_f3d0f57cbfd0b703`
+- Cited clauses: `4.3.2`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_f3d0f57cbfd0b703`
+- Cited source locators: `manual:4.3.2`, `manual:1.3.2`, `amendment-2026-01:2.1`, `amendment-2026-01:5.2`
+- Missing evidence: none
+- Missing citations: none
+- Missing source-locator evidence: none
+- Missing source-locator citations: none
+- Missing facts: none
+- Forbidden claims found: none
+- Failure taxonomy: none
+
+#### Complete answer (T16)
+
+```text
+For a change of circumstances that occurred on 15 March 2026, the recipient must report it within 14 calendar days. The 14 days run from the later of the date the change occurred and the date the recipient became aware of it. If the last day falls when the district office is closed, the period ends on the next day the office is open.
+```
+
+### T17 — PASS
+
+For an income change that occurred on 15 February 2026, do the reporting duty and overpayment protection use the same deadline?
+
 - Expected / actual: `CONFLICT` / `CONFLICT`
 - Retrieved clauses: `4.3.2`, `9.1.4`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_15069ec01b993014`, `chunk_f3d0f57cbfd0b703`
 - Cited clauses: `4.3.2`, `9.1.4`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_15069ec01b993014`, `chunk_f3d0f57cbfd0b703`
@@ -396,32 +441,10 @@ A change occurred on 15 February 2026. How many days did the recipient have to r
 - Forbidden claims found: none
 - Failure taxonomy: none
 
-#### Complete answer (T15)
+#### Complete answer (T17)
 
 ```text
 The change occurred on 15 February 2026, so the pre-amendment wording remains applicable. Section 4.3.2 says the change must be reported within 10 calendar days of the change or awareness, whichever is later. Section 9.1.4 instead describes 30 calendar days as the period required under §4.3 for its overpayment protection. The amendment does not retroactively align those provisions, so I cannot give one conflict-free deadline for this pre-March change.
-```
-
-### T16 — PASS
-
-A change occurred on 15 March 2026. How many days did the recipient have to report it?
-
-- Expected / actual: `ANSWER` / `ANSWER`
-- Retrieved clauses: `4.3.2`, `9.1.4`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_15069ec01b993014`, `chunk_f3d0f57cbfd0b703`
-- Cited clauses: `4.3.2`, `9.1.4`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_15069ec01b993014`, `chunk_f3d0f57cbfd0b703`
-- Cited source locators: `manual:4.3.2`, `manual:9.1.4`, `manual:1.3.2`, `amendment-2026-01:2.1`, `amendment-2026-01:2.2`, `amendment-2026-01:5.2`
-- Missing evidence: none
-- Missing citations: none
-- Missing source-locator evidence: none
-- Missing source-locator citations: none
-- Missing facts: none
-- Forbidden claims found: none
-- Failure taxonomy: none
-
-#### Complete answer (T16)
-
-```text
-Because the change occurred on 15 March 2026, it is subject to the amended 14-calendar-day rule. The 14 days run from the later of the date the change occurred and the date the recipient became aware of it. The aligned overpayment provision also uses 14 calendar days for changes on or after 1 March 2026.
 ```
 
 ## Method

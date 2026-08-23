@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "run_type": "strict_end_to_end",
-  "generated_at_utc": "2026-08-23T10:29:52.593231+00:00",
+  "generated_at_utc": "2026-08-23T10:57:58.832807+00:00",
   "questions_path": "D:\\brite systems\\grounded-answer\\evaluation\\adversarial_questions.json",
   "corpus_path": "D:\\brite systems\\grounded-answer\\data\\policy-manual.md",
   "corpus_sha256": "225267869bb2b02536fe59f4d73c53106305460127bdf0f15fd4a5bce796cbca",
@@ -20,18 +20,18 @@
     "refusal_threshold": 0.58,
     "direct_coverage_threshold": 0.34
   },
-  "duration_seconds": 0.263,
-  "passes": 15,
-  "failures": 0,
+  "duration_seconds": 0.621,
+  "passes": 14,
+  "failures": 1,
   "metrics": {
     "total": 15,
-    "passes": 15,
-    "failures": 0,
-    "strict_pass_rate": 1.0,
+    "passes": 14,
+    "failures": 1,
+    "strict_pass_rate": 0.9333,
     "decision": {
-      "correct": 15,
+      "correct": 14,
       "total": 15,
-      "accuracy": 1.0,
+      "accuracy": 0.9333,
       "confusion_matrix": {
         "ANSWER": {
           "ANSWER": 5,
@@ -40,8 +40,8 @@
           "ERROR": 0
         },
         "CONFLICT": {
-          "ANSWER": 0,
-          "CONFLICT": 1,
+          "ANSWER": 1,
+          "CONFLICT": 0,
           "REFUSE": 0,
           "ERROR": 0
         },
@@ -55,11 +55,11 @@
     },
     "answer": {
       "expected": 5,
-      "predicted": 5,
+      "predicted": 6,
       "decision_correct": 5,
-      "decision_precision": 1.0,
+      "decision_precision": 0.8333,
       "decision_recall": 1.0,
-      "decision_f1": 1.0,
+      "decision_f1": 0.9091,
       "strict_passes": 5,
       "strict_pass_rate": 1.0
     },
@@ -75,29 +75,29 @@
     },
     "conflict": {
       "expected": 1,
-      "predicted": 1,
-      "decision_correct": 1,
-      "decision_precision": 1.0,
-      "decision_recall": 1.0,
-      "decision_f1": 1.0,
-      "strict_passes": 1,
-      "strict_pass_rate": 1.0
+      "predicted": 0,
+      "decision_correct": 0,
+      "decision_precision": 0.0,
+      "decision_recall": 0.0,
+      "decision_f1": 0.0,
+      "strict_passes": 0,
+      "strict_pass_rate": 0.0
     },
     "retrieval": {
-      "case_passes": 8,
+      "case_passes": 7,
       "cases": 8,
-      "case_recall": 1.0,
-      "clauses_found": 17,
+      "case_recall": 0.875,
+      "clauses_found": 16,
       "clauses_expected": 17,
-      "micro_clause_recall": 1.0
+      "micro_clause_recall": 0.9412
     },
     "citation": {
-      "case_passes": 6,
+      "case_passes": 5,
       "cases": 6,
-      "case_recall": 1.0,
-      "clauses_cited": 7,
+      "case_recall": 0.8333,
+      "clauses_cited": 6,
       "clauses_expected": 7,
-      "micro_clause_recall": 1.0,
+      "micro_clause_recall": 0.8571,
       "integrity_passes": 15,
       "integrity_rate": 1.0
     },
@@ -110,31 +110,38 @@
       "citation_recall": 1.0
     },
     "facts": {
-      "case_passes": 6,
+      "case_passes": 5,
       "cases": 6,
-      "case_recall": 1.0,
-      "facts_found": 14,
+      "case_recall": 0.8333,
+      "facts_found": 13,
       "facts_expected": 14,
-      "micro_fact_recall": 1.0
+      "micro_fact_recall": 0.9286
     },
     "unsupported": {
-      "safe_cases": 15,
+      "safe_cases": 14,
       "total": 15,
-      "safety_rate": 1.0,
+      "safety_rate": 0.9333,
       "grounded_cases": 15,
       "grounding_rate": 1.0,
       "forbidden_claim_clean_cases": 15,
       "forbidden_claim_clean_rate": 1.0,
-      "false_answers": 0,
+      "false_answers": 1,
       "non_answer_cases": 10,
-      "false_answer_rate": 0.0
+      "false_answer_rate": 0.1
     },
-    "failure_taxonomy": {},
+    "failure_taxonomy": {
+      "BAD_CITATION": 1,
+      "FALSE_ANSWER": 1,
+      "INCOMPLETE_ANSWER": 1,
+      "MISSED_CONFLICT": 1,
+      "RETRIEVAL_MISS": 1,
+      "UNSUPPORTED_CLAIM": 1
+    },
     "latency_ms": {
-      "mean": 7.442,
-      "p50": 5.854,
-      "p95": 16.339,
-      "max": 16.339
+      "mean": 15.308,
+      "p50": 14.879,
+      "p95": 34.23,
+      "max": 34.23
     }
   },
   "cases": [
@@ -213,7 +220,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 12.593,
+      "elapsed_ms": 26.553,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -329,7 +336,7 @@
                 "cross_references": []
               },
               "vector_score": 0.20025046169757843,
-              "lexical_score": 0.7133946682821308,
+              "lexical_score": 0.7133946682821307,
               "fused_score": 0.874,
               "reranker_score": null,
               "vector_rank": 8,
@@ -375,8 +382,8 @@
                 "cross_references": []
               },
               "vector_score": null,
-              "lexical_score": 0.5136235520428765,
-              "fused_score": 0.6952481043636971,
+              "lexical_score": 0.5136235520428764,
+              "fused_score": 0.695248104363697,
               "reranker_score": null,
               "vector_rank": null,
               "lexical_rank": 4,
@@ -421,8 +428,8 @@
                 "cross_references": []
               },
               "vector_score": 0.23330439627170563,
-              "lexical_score": 0.4148264991584454,
-              "fused_score": 0.5073540570983185,
+              "lexical_score": 0.4148264991584453,
+              "fused_score": 0.5073540570983184,
               "reranker_score": null,
               "vector_rank": 3,
               "lexical_rank": 9,
@@ -467,8 +474,8 @@
                 "cross_references": []
               },
               "vector_score": null,
-              "lexical_score": 0.5398735453250897,
-              "fused_score": 0.4825413971206944,
+              "lexical_score": 0.5398735453250896,
+              "fused_score": 0.48254139712069427,
               "reranker_score": null,
               "vector_rank": null,
               "lexical_rank": 3,
@@ -513,8 +520,8 @@
                 "cross_references": []
               },
               "vector_score": 0.21775177121162415,
-              "lexical_score": 0.3847144913464758,
-              "fused_score": 0.47807928924614146,
+              "lexical_score": 0.38471449134647573,
+              "fused_score": 0.4780792892461414,
               "reranker_score": null,
               "vector_rank": 6,
               "lexical_rank": 12,
@@ -559,8 +566,8 @@
                 "cross_references": []
               },
               "vector_score": 0.2001323699951172,
-              "lexical_score": 0.4705501970747,
-              "fused_score": 0.4695244143999673,
+              "lexical_score": 0.4705501970746999,
+              "fused_score": 0.46952441439996717,
               "reranker_score": null,
               "vector_rank": 9,
               "lexical_rank": 6,
@@ -606,7 +613,7 @@
               },
               "vector_score": null,
               "lexical_score": null,
-              "fused_score": 0.44393808535103885,
+              "fused_score": 0.44393808535103874,
               "reranker_score": null,
               "vector_rank": null,
               "lexical_rank": null,
@@ -844,7 +851,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 5.643,
+      "elapsed_ms": 15.202,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -1562,7 +1569,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 16.339,
+      "elapsed_ms": 34.23,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -1869,7 +1876,7 @@
                 ]
               },
               "vector_score": null,
-              "lexical_score": 0.6228489818546397,
+              "lexical_score": 0.6228489818546395,
               "fused_score": 0.6317868947578972,
               "reranker_score": null,
               "vector_rank": null,
@@ -2473,7 +2480,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 4.894,
+      "elapsed_ms": 5.175,
       "error": null,
       "response": {
         "decision": "REFUSE",
@@ -3135,7 +3142,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 5.854,
+      "elapsed_ms": 7.225,
       "error": null,
       "response": {
         "decision": "REFUSE",
@@ -3795,7 +3802,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 8.275,
+      "elapsed_ms": 9.735,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -4409,7 +4416,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 6.947,
+      "elapsed_ms": 16.951,
       "error": null,
       "response": {
         "decision": "ANSWER",
@@ -5217,7 +5224,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 5.289,
+      "elapsed_ms": 12.402,
       "error": null,
       "response": {
         "decision": "REFUSE",
@@ -5982,7 +5989,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 5.717,
+      "elapsed_ms": 12.718,
       "error": null,
       "response": {
         "decision": "REFUSE",
@@ -6729,7 +6736,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 11.568,
+      "elapsed_ms": 15.15,
       "error": null,
       "response": {
         "decision": "REFUSE",
@@ -7502,7 +7509,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 10.393,
+      "elapsed_ms": 18.066,
       "error": null,
       "response": {
         "decision": "REFUSE",
@@ -8337,7 +8344,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 5.434,
+      "elapsed_ms": 14.303,
       "error": null,
       "response": {
         "decision": "REFUSE",
@@ -8886,7 +8893,7 @@
       "category": "CONFLICT_PARAPHRASE",
       "notes": "For a pre-effective-date change, an explicit user-observed discrepancy must surface both reviewed clauses rather than choose a deadline.",
       "expected_decision": "CONFLICT",
-      "actual_decision": "CONFLICT",
+      "actual_decision": "ANSWER",
       "expected_clause_ids": [
         "4.3.2",
         "9.1.4"
@@ -8912,63 +8919,73 @@
       ],
       "retrieved_clause_ids": [
         "4.3.2",
-        "9.1.4",
         "1.3.2",
         "chunk_c914241b1fc69d6b",
-        "chunk_15069ec01b993014",
         "chunk_f3d0f57cbfd0b703"
       ],
       "cited_clause_ids": [
         "4.3.2",
-        "9.1.4",
         "1.3.2",
         "chunk_c914241b1fc69d6b",
-        "chunk_15069ec01b993014",
         "chunk_f3d0f57cbfd0b703"
       ],
       "retrieved_source_locators": [
         "manual:4.3.2",
-        "manual:9.1.4",
         "manual:1.3.2",
         "amendment-2026-01:2.1",
-        "amendment-2026-01:2.2",
         "amendment-2026-01:5.2"
       ],
       "cited_source_locators": [
         "manual:4.3.2",
-        "manual:9.1.4",
         "manual:1.3.2",
         "amendment-2026-01:2.1",
-        "amendment-2026-01:2.2",
         "amendment-2026-01:5.2"
       ],
-      "direct_clause_ids": [],
-      "missing_evidence_clause_ids": [],
-      "missing_citation_clause_ids": [],
+      "direct_clause_ids": [
+        "4.3.2",
+        "1.3.2",
+        "chunk_c914241b1fc69d6b",
+        "chunk_f3d0f57cbfd0b703"
+      ],
+      "missing_evidence_clause_ids": [
+        "9.1.4"
+      ],
+      "missing_citation_clause_ids": [
+        "9.1.4"
+      ],
       "missing_evidence_source_locators": [],
       "missing_citation_source_locators": [],
-      "missing_facts": [],
+      "missing_facts": [
+        "30 calendar days"
+      ],
       "forbidden_claims_found": [],
       "checks": {
         "trace": true,
-        "decision": true,
-        "retrieval": true,
-        "citation_recall": true,
+        "decision": false,
+        "retrieval": false,
+        "citation_recall": false,
         "citation_integrity": true,
-        "facts": true,
+        "facts": false,
         "forbidden_claims": true,
         "grounding": true,
         "refusal_contract": true,
-        "unsupported_claim_safety": true
+        "unsupported_claim_safety": false
       },
-      "overall_pass": true,
-      "failure_types": [],
-      "primary_failure": null,
-      "elapsed_ms": 0.39,
+      "overall_pass": false,
+      "failure_types": [
+        "MISSED_CONFLICT",
+        "FALSE_ANSWER",
+        "RETRIEVAL_MISS",
+        "BAD_CITATION",
+        "INCOMPLETE_ANSWER",
+        "UNSUPPORTED_CLAIM"
+      ],
+      "primary_failure": "MISSED_CONFLICT",
+      "elapsed_ms": 17.571,
       "error": null,
       "response": {
-        "decision": "CONFLICT",
-        "answer": "The change occurred on 15 February 2026, so the pre-amendment wording remains applicable. Section 4.3.2 says the change must be reported within 10 calendar days of the change or awareness, whichever is later. Section 9.1.4 instead describes 30 calendar days as the period required under §4.3 for its overpayment protection. The amendment does not retroactively align those provisions, so I cannot give one conflict-free deadline for this pre-March change.",
+        "decision": "ANSWER",
+        "answer": "For a change of circumstances that occurred on 15 February 2026, the recipient must report it within 10 calendar days. The 10 days run from the later of the date the change occurred and the date the recipient became aware of it. If the last day falls when the district office is closed, the period ends on the next day the office is open.",
         "citations": [
           {
             "chunk_id": "chunk_d20e989463a425a5",
@@ -8988,25 +9005,6 @@
             "locator_kind": "clause",
             "source_locator": "manual:4.3.2",
             "source_locator_label": "Policy Manual §4.3.2"
-          },
-          {
-            "chunk_id": "chunk_81b456d424c35ff2",
-            "clause_id": "9.1.4",
-            "section_id": "9.1",
-            "section_title": "Establishing an overpayment",
-            "page": null,
-            "line_start": 448,
-            "line_end": 448,
-            "excerpt": "Where an overpayment has arisen from a change of circumstances, and the recipient reported the change within the 30 calendar days required under §4.3, no overpayment shall be established in respect of any period before the date on which the Department was in a position to act on the report.",
-            "document_id": "calder-hsp-policy-manual",
-            "document_name": "policy-manual.md",
-            "document_title": "Calder County Household Support Program Policy Manual",
-            "source_kind": "manual",
-            "amendment_number": null,
-            "effective_date": "2025-12-31",
-            "locator_kind": "clause",
-            "source_locator": "manual:9.1.4",
-            "source_locator_label": "Policy Manual §9.1.4"
           },
           {
             "chunk_id": "chunk_58125eebaad1d3a4",
@@ -9047,25 +9045,6 @@
             "source_locator_label": "Amendment No. 2026-01 ¶2.1"
           },
           {
-            "chunk_id": "chunk_15069ec01b993014",
-            "clause_id": null,
-            "section_id": "amendment-2026-01.2",
-            "section_title": "Reporting of changes of circumstances",
-            "page": null,
-            "line_start": 20,
-            "line_end": 22,
-            "excerpt": "In §9.1.4, for \"30 calendar days\" substitute \"14 calendar days\".\n\n*Note for staff: the figure stated in §9.1.4 did not previously correspond to the requirement in §4.3.2. This amendment aligns the two. Determinations made before 1 March 2026 remain subject to §1.2.3 and to paragraph 5 below.*",
-            "document_id": "calder-hsp-amendment-2026-01",
-            "document_name": "amendment-2026-01.md",
-            "document_title": "Calder County Household Support Program Amendment No. 2026-01",
-            "source_kind": "amendment",
-            "amendment_number": "2026-01",
-            "effective_date": "2026-03-01",
-            "locator_kind": "paragraph",
-            "source_locator": "amendment-2026-01:2.2",
-            "source_locator_label": "Amendment No. 2026-01 ¶2.2"
-          },
-          {
             "chunk_id": "chunk_f3d0f57cbfd0b703",
             "clause_id": null,
             "section_id": "amendment-2026-01.5",
@@ -9085,9 +9064,9 @@
             "source_locator_label": "Amendment No. 2026-01 ¶5.2"
           }
         ],
-        "evidence_level": "LOW",
-        "reason": "For a pre-1-March change, §4.3.2 requires reporting within 10 calendar days while §9.1.4 calls 30 calendar days the period required under §4.3. Amendment paragraph 5.2 preserves that old regime.",
-        "next_step": "Escalate the conflicting provisions to a Department supervisor or other designated policy authority before acting.",
+        "evidence_level": "HIGH",
+        "reason": "Section 4.3.2 is the specific reporting-obligation clause, and amendment paragraph 5.2 preserves the reporting period in force on the date of a pre-1-March-2026 change.",
+        "next_step": null,
         "trace": {
           "question": "I found both 10 days and 30 days in the manual. Which deadline governs reporting a household change that occurred on 15 February 2026?",
           "retrieved": [
@@ -9139,54 +9118,6 @@
             },
             {
               "chunk": {
-                "chunk_id": "chunk_81b456d424c35ff2",
-                "document_id": "calder-hsp-policy-manual",
-                "document_name": "policy-manual.md",
-                "document_version": "31 December 2025",
-                "effective_date": "2025-12-31",
-                "active": true,
-                "source_kind": "manual",
-                "document_title": "Calder County Household Support Program Policy Manual",
-                "amendment_number": null,
-                "issued_date": null,
-                "text": "Where an overpayment has arisen from a change of circumstances, and the recipient reported the change within the 30 calendar days required under §4.3, no overpayment shall be established in respect of any period before the date on which the Department was in a position to act on the report.",
-                "raw_text": "Where an overpayment has arisen from a change of circumstances, and the recipient reported the change within the **30 calendar days** required under §4.3, no overpayment shall be established in respect of any period before the date on which the Department was in a position to act on the report.",
-                "normalized_text": "Where an overpayment has arisen from a change of circumstances, and the recipient reported the change within the 30 calendar days required under §4.3, no overpayment shall be established in respect of any period before the date on which the Department was in a position to act on the report.",
-                "source_text": "**9.1.4** Where an overpayment has arisen from a change of circumstances, and the recipient reported the change within the **30 calendar days** required under §4.3, no overpayment shall be established in respect of any period before the date on which the Department was in a position to act on the report.",
-                "part_id": "9",
-                "part_title": "Overpayments and Recovery",
-                "section_id": "9.1",
-                "section_title": "Establishing an overpayment",
-                "clause_id": "9.1.4",
-                "official_clause_id": true,
-                "locator_kind": "clause",
-                "source_locator": "manual:9.1.4",
-                "source_locator_label": "Policy Manual §9.1.4",
-                "amends_clause_ids": [],
-                "inserts_clause_ids": [],
-                "page": null,
-                "line_start": 448,
-                "line_end": 448,
-                "start_offset": 21602,
-                "end_offset": 21908,
-                "source_order": 103,
-                "document_index": 0,
-                "document_order": 103,
-                "cross_references": [
-                  "4.3"
-                ]
-              },
-              "vector_score": null,
-              "lexical_score": 1.0,
-              "fused_score": 1.0,
-              "reranker_score": null,
-              "vector_rank": null,
-              "lexical_rank": 2,
-              "reranker_rank": null,
-              "neighbor_of": null
-            },
-            {
-              "chunk": {
                 "chunk_id": "chunk_58125eebaad1d3a4",
                 "document_id": "calder-hsp-policy-manual",
                 "document_name": "policy-manual.md",
@@ -9227,7 +9158,7 @@
               "fused_score": 1.0,
               "reranker_score": null,
               "vector_rank": null,
-              "lexical_rank": 3,
+              "lexical_rank": 2,
               "reranker_rank": null,
               "neighbor_of": null
             },
@@ -9277,61 +9208,7 @@
               "fused_score": 1.0,
               "reranker_score": null,
               "vector_rank": null,
-              "lexical_rank": 4,
-              "reranker_rank": null,
-              "neighbor_of": null
-            },
-            {
-              "chunk": {
-                "chunk_id": "chunk_15069ec01b993014",
-                "document_id": "calder-hsp-amendment-2026-01",
-                "document_name": "amendment-2026-01.md",
-                "document_version": "Amendment No. 2026-01",
-                "effective_date": "2026-03-01",
-                "active": true,
-                "source_kind": "amendment",
-                "document_title": "Calder County Household Support Program Amendment No. 2026-01",
-                "amendment_number": "2026-01",
-                "issued_date": "2026-02-12",
-                "text": "In §9.1.4, for \"30 calendar days\" substitute \"14 calendar days\".\n\n*Note for staff: the figure stated in §9.1.4 did not previously correspond to the requirement in §4.3.2. This amendment aligns the two. Determinations made before 1 March 2026 remain subject to §1.2.3 and to paragraph 5 below.*",
-                "raw_text": "In §9.1.4, for \"30 calendar days\" substitute \"**14 calendar days**\".\n\n*Note for staff: the figure stated in §9.1.4 did not previously correspond to the requirement in §4.3.2. This amendment aligns the two. Determinations made before 1 March 2026 remain subject to §1.2.3 and to paragraph 5 below.*",
-                "normalized_text": "In §9.1.4, for \"30 calendar days\" substitute \"14 calendar days\". *Note for staff: the figure stated in §9.1.4 did not previously correspond to the requirement in §4.3.2. This amendment aligns the two. Determinations made before 1 March 2026 remain subject to §1.2.3 and to paragraph 5 below.*",
-                "source_text": "**2.2** In §9.1.4, for \"30 calendar days\" substitute \"**14 calendar days**\".\n\n*Note for staff: the figure stated in §9.1.4 did not previously correspond to the requirement in §4.3.2. This amendment aligns the two. Determinations made before 1 March 2026 remain subject to §1.2.3 and to paragraph 5 below.*",
-                "part_id": "amendment-2026-01",
-                "part_title": "Amendment No. 2026-01",
-                "section_id": "amendment-2026-01.2",
-                "section_title": "Reporting of changes of circumstances",
-                "clause_id": null,
-                "official_clause_id": false,
-                "locator_kind": "paragraph",
-                "source_locator": "amendment-2026-01:2.2",
-                "source_locator_label": "Amendment No. 2026-01 ¶2.2",
-                "amends_clause_ids": [
-                  "1.2.3",
-                  "4.3.2",
-                  "9.1.4"
-                ],
-                "inserts_clause_ids": [],
-                "page": null,
-                "line_start": 20,
-                "line_end": 22,
-                "start_offset": 513,
-                "end_offset": 822,
-                "source_order": 150,
-                "document_index": 1,
-                "document_order": 2,
-                "cross_references": [
-                  "1.2.3",
-                  "4.3.2",
-                  "9.1.4"
-                ]
-              },
-              "vector_score": null,
-              "lexical_score": 1.0,
-              "fused_score": 1.0,
-              "reranker_score": null,
-              "vector_rank": null,
-              "lexical_rank": 5,
+              "lexical_rank": 3,
               "reranker_rank": null,
               "neighbor_of": null
             },
@@ -9377,7 +9254,7 @@
               "fused_score": 1.0,
               "reranker_score": null,
               "vector_rank": null,
-              "lexical_rank": 6,
+              "lexical_rank": 4,
               "reranker_rank": null,
               "neighbor_of": null
             }
@@ -9385,17 +9262,7 @@
           "evidence": [
             {
               "chunk_id": "chunk_d20e989463a425a5",
-              "support_type": "CONTRADICTORY",
-              "explanation": "Selected by the source-verified temporal applicability rule.",
-              "score": 1.0,
-              "topic_coverage": 1.0,
-              "answer_alignment": 1.0,
-              "matched_terms": [],
-              "missing_terms": []
-            },
-            {
-              "chunk_id": "chunk_81b456d424c35ff2",
-              "support_type": "CONTRADICTORY",
+              "support_type": "DIRECT",
               "explanation": "Selected by the source-verified temporal applicability rule.",
               "score": 1.0,
               "topic_coverage": 1.0,
@@ -9405,7 +9272,7 @@
             },
             {
               "chunk_id": "chunk_58125eebaad1d3a4",
-              "support_type": "CONTRADICTORY",
+              "support_type": "DIRECT",
               "explanation": "Selected by the source-verified temporal applicability rule.",
               "score": 1.0,
               "topic_coverage": 1.0,
@@ -9415,17 +9282,7 @@
             },
             {
               "chunk_id": "chunk_c914241b1fc69d6b",
-              "support_type": "CONTRADICTORY",
-              "explanation": "Selected by the source-verified temporal applicability rule.",
-              "score": 1.0,
-              "topic_coverage": 1.0,
-              "answer_alignment": 1.0,
-              "matched_terms": [],
-              "missing_terms": []
-            },
-            {
-              "chunk_id": "chunk_15069ec01b993014",
-              "support_type": "CONTRADICTORY",
+              "support_type": "DIRECT",
               "explanation": "Selected by the source-verified temporal applicability rule.",
               "score": 1.0,
               "topic_coverage": 1.0,
@@ -9435,7 +9292,7 @@
             },
             {
               "chunk_id": "chunk_f3d0f57cbfd0b703",
-              "support_type": "CONTRADICTORY",
+              "support_type": "DIRECT",
               "explanation": "Selected by the source-verified temporal applicability rule.",
               "score": 1.0,
               "topic_coverage": 1.0,
@@ -9444,24 +9301,9 @@
               "missing_terms": []
             }
           ],
-          "conflicts": [
-            {
-              "finding_id": "CONFLICT-001-PRE-AMENDMENT",
-              "chunk_ids": [
-                "chunk_d20e989463a425a5",
-                "chunk_81b456d424c35ff2"
-              ],
-              "clause_ids": [
-                "4.3.2",
-                "9.1.4"
-              ],
-              "explanation": "For a pre-1-March change, §4.3.2 requires reporting within 10 calendar days while §9.1.4 calls 30 calendar days the period required under §4.3. Amendment paragraph 5.2 preserves that old regime.",
-              "basis": "CURATED",
-              "confidence": 1.0
-            }
-          ],
-          "decision": "CONFLICT",
-          "decision_reason": "For a pre-1-March change, §4.3.2 requires reporting within 10 calendar days while §9.1.4 calls 30 calendar days the period required under §4.3. Amendment paragraph 5.2 preserves that old regime.",
+          "conflicts": [],
+          "decision": "ANSWER",
+          "decision_reason": "Section 4.3.2 is the specific reporting-obligation clause, and amendment paragraph 5.2 preserves the reporting period in force on the date of a pre-1-March-2026 change.",
           "refusal_threshold": 1.0,
           "resolution_path": "temporal",
           "required_aspects": [],
@@ -9536,7 +9378,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 5.316,
+      "elapsed_ms": 14.879,
       "error": null,
       "response": {
         "decision": "REFUSE",
@@ -10139,7 +9981,7 @@
       "overall_pass": true,
       "failure_types": [],
       "primary_failure": null,
-      "elapsed_ms": 6.975,
+      "elapsed_ms": 9.464,
       "error": null,
       "response": {
         "decision": "REFUSE",
@@ -10680,7 +10522,7 @@
     "core": [
       {
         "name": "Clause-level citation",
-        "pass": true
+        "pass": false
       },
       {
         "name": "Visible refusal",
@@ -10706,7 +10548,7 @@
     "bonus": [
       {
         "name": "Contradiction surfaced",
-        "pass": true
+        "pass": false
       },
       {
         "name": "Refusal threshold calibrated",

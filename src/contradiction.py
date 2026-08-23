@@ -21,6 +21,12 @@ NUMERIC_INTENT_RE = re.compile(
     r"days?|weeks?|months?|years?|per cent|percent)\b",
     re.IGNORECASE,
 )
+REPORTING_OVERPAYMENT_SCOPE_RE = re.compile(
+    r"\b(overpayment|recover(?:y|able)|protection|conflict|inconsisten(?:t|cy)|"
+    r"9\.1\.4|10\s*(?:or|versus|vs\.?)\s*30)\b",
+    re.IGNORECASE,
+)
+REPORTING_DEADLINE_PAIR = frozenset({"4.3.2", "9.1.4"})
 EXCEPTION_SCOPE_RE = re.compile(r"\b(extended to|except|unless|where|up to|first)\b", re.IGNORECASE)
 NEGATIVE_ACTION_RE = re.compile(
     r"\b(?:must not|shall not|may not)\s+(?:be\s+)?(?P<action>[a-z]+)",
@@ -112,6 +118,16 @@ class ContradictionDetector:
         right: RetrievedClause,
     ) -> ConflictFinding | None:
         if not NUMERIC_INTENT_RE.search(question):
+            return None
+        clause_pair = frozenset(
+            clause_id
+            for clause_id in (left.chunk.clause_id, right.chunk.clause_id)
+            if clause_id
+        )
+        if (
+            clause_pair == REPORTING_DEADLINE_PAIR
+            and not REPORTING_OVERPAYMENT_SCOPE_RE.search(question)
+        ):
             return None
         left_text = left.chunk.text
         right_text = right.chunk.text

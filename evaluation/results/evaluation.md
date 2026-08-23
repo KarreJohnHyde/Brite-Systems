@@ -1,6 +1,6 @@
 # Evaluation Results — The Grounded Answer
 
-**Generated (UTC):** 2026-08-23T10:29:52.680499+00:00
+**Generated (UTC):** 2026-08-23T10:57:59.081680+00:00
 **Run type:** `strict_end_to_end`
 **Corpus SHA-256:** `225267869bb2b02536fe59f4d73c53106305460127bdf0f15fd4a5bce796cbca`
 **Embedding backend:** `hashing`
@@ -13,16 +13,16 @@
 | :-- | --: |
 | Strict cases passed | 18 / 18 (100.0%) |
 | Decision accuracy | 18 / 18 (100.0%) |
-| ANSWER decision precision / recall | 100.0% / 100.0% (11 correct) |
+| ANSWER decision precision / recall | 100.0% / 100.0% (12 correct) |
 | REFUSE decision precision / recall | 100.0% / 100.0% (5 correct) |
-| CONFLICT decision precision / recall | 100.0% / 100.0% (2 correct) |
+| CONFLICT decision precision / recall | 100.0% / 100.0% (1 correct) |
 | Expected evidence retrieval | 44 / 44 (100.0%) |
 | Required citation recall | 26 / 26 (100.0%) |
-| Required amendment/source citation recall | 5 / 5 (100.0%) |
+| Required amendment/source citation recall | 6 / 6 (100.0%) |
 | Citation integrity | 18 / 18 (100.0%) |
-| Expected fact recall | 53 / 53 (100.0%) |
+| Expected fact recall | 54 / 54 (100.0%) |
 | Unsupported-claim safety | 18 / 18 (100.0%) |
-| False answers on REFUSE/CONFLICT cases | 0 / 7 (0.0%) |
+| False answers on REFUSE/CONFLICT cases | 0 / 6 (0.0%) |
 
 ## Requirement summary
 
@@ -57,7 +57,7 @@ No failures.
 | Q02 | MULTI_CLAUSE | ANSWER | ANSWER | PASS | PASS | PASS | PASS | PASS | — |
 | Q03 | MULTI_CLAUSE | ANSWER | ANSWER | PASS | PASS | PASS | PASS | PASS | — |
 | Q04 | MULTI_CLAUSE | ANSWER | ANSWER | PASS | PASS | PASS | PASS | PASS | — |
-| Q05 | CONFLICT | CONFLICT | CONFLICT | PASS | PASS | PASS | PASS | PASS | — |
+| Q05 | TEMPORAL_BEFORE | ANSWER | ANSWER | PASS | PASS | PASS | PASS | PASS | — |
 | Q06 | POLICY_GAP | REFUSE | REFUSE | PASS | PASS | PASS | PASS | PASS | — |
 | Q07 | ABSENT_CLASSIFICATION | REFUSE | REFUSE | PASS | PASS | PASS | PASS | PASS | — |
 | Q08 | CONFLICT | CONFLICT | CONFLICT | PASS | PASS | PASS | PASS | PASS | — |
@@ -185,10 +185,10 @@ The manual states:
 
 How many calendar days does a recipient have to report a change of circumstances that occurred on 15 February 2026?
 
-- Expected / actual: `CONFLICT` / `CONFLICT`
-- Retrieved clauses: `4.3.2`, `9.1.4`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_15069ec01b993014`, `chunk_f3d0f57cbfd0b703`
-- Cited clauses: `4.3.2`, `9.1.4`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_15069ec01b993014`, `chunk_f3d0f57cbfd0b703`
-- Cited source locators: `manual:4.3.2`, `manual:9.1.4`, `manual:1.3.2`, `amendment-2026-01:2.1`, `amendment-2026-01:2.2`, `amendment-2026-01:5.2`
+- Expected / actual: `ANSWER` / `ANSWER`
+- Retrieved clauses: `4.3.2`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_f3d0f57cbfd0b703`
+- Cited clauses: `4.3.2`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_f3d0f57cbfd0b703`
+- Cited source locators: `manual:4.3.2`, `manual:1.3.2`, `amendment-2026-01:2.1`, `amendment-2026-01:5.2`
 - Missing evidence: none
 - Missing citations: none
 - Missing source-locator evidence: none
@@ -200,7 +200,7 @@ How many calendar days does a recipient have to report a change of circumstances
 #### Complete answer (Q05)
 
 ```text
-The change occurred on 15 February 2026, so the pre-amendment wording remains applicable. Section 4.3.2 says the change must be reported within 10 calendar days of the change or awareness, whichever is later. Section 9.1.4 instead describes 30 calendar days as the period required under §4.3 for its overpayment protection. The amendment does not retroactively align those provisions, so I cannot give one conflict-free deadline for this pre-March change.
+For a change of circumstances that occurred on 15 February 2026, the recipient must report it within 10 calendar days. The 10 days run from the later of the date the change occurred and the date the recipient became aware of it. If the last day falls when the district office is closed, the period ends on the next day the office is open.
 ```
 
 ### Q06 — PASS

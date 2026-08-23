@@ -1,6 +1,6 @@
 # Evaluation Results — The Grounded Answer
 
-**Generated (UTC):** 2026-08-23T10:29:52.593231+00:00
+**Generated (UTC):** 2026-08-23T10:57:58.832807+00:00
 **Run type:** `strict_end_to_end`
 **Corpus SHA-256:** `225267869bb2b02536fe59f4d73c53106305460127bdf0f15fd4a5bce796cbca`
 **Embedding backend:** `hashing`
@@ -11,18 +11,18 @@
 
 | Metric | Result |
 | :-- | --: |
-| Strict cases passed | 15 / 15 (100.0%) |
-| Decision accuracy | 15 / 15 (100.0%) |
-| ANSWER decision precision / recall | 100.0% / 100.0% (5 correct) |
+| Strict cases passed | 14 / 15 (93.3%) |
+| Decision accuracy | 14 / 15 (93.3%) |
+| ANSWER decision precision / recall | 83.3% / 100.0% (5 correct) |
 | REFUSE decision precision / recall | 100.0% / 100.0% (9 correct) |
-| CONFLICT decision precision / recall | 100.0% / 100.0% (1 correct) |
-| Expected evidence retrieval | 17 / 17 (100.0%) |
-| Required citation recall | 7 / 7 (100.0%) |
+| CONFLICT decision precision / recall | 0.0% / 0.0% (0 correct) |
+| Expected evidence retrieval | 16 / 17 (94.1%) |
+| Required citation recall | 6 / 7 (85.7%) |
 | Required amendment/source citation recall | 1 / 1 (100.0%) |
 | Citation integrity | 15 / 15 (100.0%) |
-| Expected fact recall | 14 / 14 (100.0%) |
-| Unsupported-claim safety | 15 / 15 (100.0%) |
-| False answers on REFUSE/CONFLICT cases | 0 / 10 (0.0%) |
+| Expected fact recall | 13 / 14 (92.9%) |
+| Unsupported-claim safety | 14 / 15 (93.3%) |
+| False answers on REFUSE/CONFLICT cases | 1 / 10 (10.0%) |
 
 ## Requirement summary
 
@@ -30,7 +30,7 @@
 
 | Status | Requirement |
 | :-- | :-- |
-| PASS | Clause-level citation |
+| FAIL | Clause-level citation |
 | PASS | Visible refusal |
 | PASS | At least one correct refusal |
 | PASS | 10+ self-created test questions |
@@ -41,13 +41,20 @@
 
 | Status | Requirement |
 | :-- | :-- |
-| PASS | Contradiction surfaced |
+| FAIL | Contradiction surfaced |
 | PASS | Refusal threshold calibrated |
 | PASS | Citation source lookup |
 
 ## Failure taxonomy
 
-No failures.
+| Failure type | Cases |
+| :-- | --: |
+| `BAD_CITATION` | 1 |
+| `FALSE_ANSWER` | 1 |
+| `INCOMPLETE_ANSWER` | 1 |
+| `MISSED_CONFLICT` | 1 |
+| `RETRIEVAL_MISS` | 1 |
+| `UNSUPPORTED_CLAIM` | 1 |
 
 ## Case summary
 
@@ -65,7 +72,7 @@ No failures.
 | A10 | OUT_OF_SCOPE | REFUSE | REFUSE | PASS | PASS | PASS | PASS | PASS | — |
 | A11 | NONSENSE | REFUSE | REFUSE | PASS | PASS | PASS | PASS | PASS | — |
 | A12 | MIXED_SUPPORTED_UNSUPPORTED | REFUSE | REFUSE | PASS | PASS | PASS | PASS | PASS | — |
-| A13 | CONFLICT_PARAPHRASE | CONFLICT | CONFLICT | PASS | PASS | PASS | PASS | PASS | — |
+| A13 | CONFLICT_PARAPHRASE | CONFLICT | ANSWER | FAIL | FAIL | FAIL | FAIL | FAIL | MISSED_CONFLICT, FALSE_ANSWER, RETRIEVAL_MISS, BAD_CITATION, INCOMPLETE_ANSWER, UNSUPPORTED_CLAIM |
 | A14 | SERVICE_ACCESS_GAP | REFUSE | REFUSE | PASS | PASS | PASS | PASS | PASS | — |
 | A15 | TYPO_SERVICE_ACCESS_GAP | REFUSE | REFUSE | PASS | PASS | PASS | PASS | PASS | — |
 
@@ -335,26 +342,26 @@ What is the resource limit, and how is cryptocurrency valued?
 I don't know based on the current policy manual. The manual does not clearly settle this question.
 ```
 
-### A13 — PASS
+### A13 — FAIL
 
 I found both 10 days and 30 days in the manual. Which deadline governs reporting a household change that occurred on 15 February 2026?
 
-- Expected / actual: `CONFLICT` / `CONFLICT`
-- Retrieved clauses: `4.3.2`, `9.1.4`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_15069ec01b993014`, `chunk_f3d0f57cbfd0b703`
-- Cited clauses: `4.3.2`, `9.1.4`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_15069ec01b993014`, `chunk_f3d0f57cbfd0b703`
-- Cited source locators: `manual:4.3.2`, `manual:9.1.4`, `manual:1.3.2`, `amendment-2026-01:2.1`, `amendment-2026-01:2.2`, `amendment-2026-01:5.2`
-- Missing evidence: none
-- Missing citations: none
+- Expected / actual: `CONFLICT` / `ANSWER`
+- Retrieved clauses: `4.3.2`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_f3d0f57cbfd0b703`
+- Cited clauses: `4.3.2`, `1.3.2`, `chunk_c914241b1fc69d6b`, `chunk_f3d0f57cbfd0b703`
+- Cited source locators: `manual:4.3.2`, `manual:1.3.2`, `amendment-2026-01:2.1`, `amendment-2026-01:5.2`
+- Missing evidence: `9.1.4`
+- Missing citations: `9.1.4`
 - Missing source-locator evidence: none
 - Missing source-locator citations: none
-- Missing facts: none
+- Missing facts: `30 calendar days`
 - Forbidden claims found: none
-- Failure taxonomy: none
+- Failure taxonomy: `MISSED_CONFLICT`, `FALSE_ANSWER`, `RETRIEVAL_MISS`, `BAD_CITATION`, `INCOMPLETE_ANSWER`, `UNSUPPORTED_CLAIM`
 
 #### Complete answer (A13)
 
 ```text
-The change occurred on 15 February 2026, so the pre-amendment wording remains applicable. Section 4.3.2 says the change must be reported within 10 calendar days of the change or awareness, whichever is later. Section 9.1.4 instead describes 30 calendar days as the period required under §4.3 for its overpayment protection. The amendment does not retroactively align those provisions, so I cannot give one conflict-free deadline for this pre-March change.
+For a change of circumstances that occurred on 15 February 2026, the recipient must report it within 10 calendar days. The 10 days run from the later of the date the change occurred and the date the recipient became aware of it. If the last day falls when the district office is closed, the period ends on the next day the office is open.
 ```
 
 ### A14 — PASS

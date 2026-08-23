@@ -14,6 +14,7 @@ import argparse
 import json
 import logging
 import sys
+from datetime import date
 from functools import lru_cache
 from pathlib import Path
 
@@ -27,6 +28,15 @@ from src.parser import (
     parse_policy_sources,
 )
 from src.pipeline import GroundedAnswerPipeline, ingest_corpus, load_source_chunks
+
+
+def _iso_date(value: str) -> date:
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"invalid date {value!r}; use YYYY-MM-DD"
+        ) from exc
 
 
 def _settings(args: argparse.Namespace) -> Settings:
@@ -75,7 +85,12 @@ def cmd_ask(args: argparse.Namespace) -> int:
     _configure_logging(settings, args.debug)
     pipeline = GroundedAnswerPipeline.load(settings)
     try:
-        answer = pipeline.ask(args.question, include_trace=args.debug)
+        answer = pipeline.ask(
+            args.question,
+            include_trace=args.debug,
+            change_date=args.change_date,
+            determination_date=args.determination_date,
+        )
         if args.json:
             print(answer.model_dump_json(indent=2))
         else:
@@ -252,6 +267,18 @@ def build_parser() -> argparse.ArgumentParser:
     ask.add_argument("--amendment", type=Path, help=argparse.SUPPRESS)
     ask.add_argument("--embedding-backend", choices=("hashing", "sentence-transformers"))
     ask.add_argument("--provider", choices=("deterministic", "gemini"))
+    ask.add_argument(
+        "--change-date",
+        type=_iso_date,
+        metavar="YYYY-MM-DD",
+        help="Date the change of circumstances occurred",
+    )
+    ask.add_argument(
+        "--determination-date",
+        type=_iso_date,
+        metavar="YYYY-MM-DD",
+        help="Date the policy determination was made",
+    )
     ask.add_argument("--debug", action="store_true", help="Show retrieval/evidence/decision trace")
     ask.add_argument("--json", action="store_true", help="Emit the validated response as JSON")
     ask.set_defaults(func=cmd_ask)

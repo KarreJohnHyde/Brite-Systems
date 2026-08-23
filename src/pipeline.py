@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import logging
+from datetime import date
 from pathlib import Path
 
 from config.settings import Settings
@@ -333,7 +334,14 @@ class GroundedAnswerPipeline:
                 "Reviewed policy metadata cites unknown clauses: " + ", ".join(unknown)
             )
 
-    def ask(self, question: str, *, include_trace: bool = False) -> PolicyAnswer:
+    def ask(
+        self,
+        question: str,
+        *,
+        include_trace: bool = False,
+        change_date: date | None = None,
+        determination_date: date | None = None,
+    ) -> PolicyAnswer:
         normalized = question.strip()
         if not normalized:
             raise ValueError("Question must not be empty")
@@ -345,8 +353,42 @@ class GroundedAnswerPipeline:
             answer_provider=self.settings.llm_provider,
             model=model,
         ) as query_span:
+            with self.tracer.span("query-and-date-extraction", "tool") as query_context_span:
+                temporal_context = self.temporal_resolver.build_context(
+                    normalized,
+                    change_date=change_date,
+                    determination_date=determination_date,
+                )
+                query_context_span.end(
+                    {
+                        "date_mention_count": len(temporal_context.mentions),
+                        "has_change_date": temporal_context.change_date is not None,
+                        "has_determination_date": temporal_context.determination_date is not None,
+                        "has_claim_period": (
+                            temporal_context.period_start is not None
+                            and temporal_context.period_end is not None
+                        ),
+                        "ambiguous_numeric_date": temporal_context.ambiguous_numeric_date,
+                    }
+                )
+
+            with self.tracer.span("retrieve-policy-evidence", "retriever") as retrieval_span:
+                retrieved = self.retriever.retrieve(normalized)
+                retrieval_span.end(
+                    {
+                        "result_count": len(retrieved),
+                        "clause_ids": [
+                            item.chunk.clause_id or item.chunk.chunk_id for item in retrieved
+                        ],
+                    }
+                )
+
             with self.tracer.span("temporal-applicability", "tool") as temporal_span:
-                temporal_answer = self.temporal_resolver.resolve(normalized, include_trace=include_trace)
+                temporal_answer = self.temporal_resolver.resolve(
+                    normalized,
+                    include_trace=include_trace,
+                    context=temporal_context,
+                )
                 if temporal_answer is not None:
                     temporal_span.end({"decision": temporal_answer.decision.value})
                     query_span.end(
@@ -362,17 +404,6 @@ class GroundedAnswerPipeline:
                     )
                     return temporal_answer
                 temporal_span.end({"decision": "skipped"})
-
-            with self.tracer.span("retrieve-policy-evidence", "retriever") as retrieval_span:
-                retrieved = self.retriever.retrieve(normalized)
-                retrieval_span.end(
-                    {
-                        "result_count": len(retrieved),
-                        "clause_ids": [
-                            item.chunk.clause_id or item.chunk.chunk_id for item in retrieved
-                        ],
-                    }
-                )
 
             with self.tracer.span("decide-answer-state", "chain") as decision_span:
                 trace = self.decision_engine.decide(normalized, retrieved)

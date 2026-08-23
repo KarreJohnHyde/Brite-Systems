@@ -32,7 +32,7 @@ AI drafted and revised Python modules, Pydantic schemas, configuration loading,
 the CLI, the optional Streamlit interface, deterministic retrieval/generation,
 the optional Gemini provider, and citation safeguards. It also assisted with the
 amendment parser, source-bundle integrity checks, a source-verified policy
-timeline, and date-sensitive resolution before retrieval. Generated code was
+timeline, and date-sensitive resolution after hybrid retrieval. Generated code was
 inspected in the repository rather than accepted solely from prose output. Codex
 also added direct LangSmith instrumentation with a strict diagnostic allowlist;
 raw questions, answers, policy text, reasons, and next steps are not included in

@@ -16,8 +16,9 @@ miss from insufficient support, a missed conflict, a generation error, or a bad
 citation. The composition root in `src/pipeline.py` makes the order explicit:
 
 ```text
-parse source bundle → validate timeline → resolve controlling date
-                    → retrieve when needed → assess support
+parse source bundle → validate timeline → extract query/date context
+                    → hybrid clause retrieval → resolve controlling policy version
+                    → assess support
                     → detect conflicts/gaps → decide
                     → build answer/refusal/conflict → validate citations
 ```
@@ -171,9 +172,12 @@ sources, explain why no single rule controls, and provide escalation guidance.
 
 Confirmed source issues currently include:
 
-- for a change occurring before 1 March 2026, §4.3.2 versus §9.1.4 on a 10-day
-  versus 30-day reporting period; amendment ¶5.2 retains the historical period
-  but does not choose between those inconsistent base provisions;
+- for a direct reporting-duty question about a change before 1 March 2026,
+  §4.3.2 is the specific obligation and supplies a 10-day answer under
+  amendment ¶5.2;
+- for a pre-1-March question about overpayment protection or whether the two
+  provisions agree, §4.3.2's 10 days and §9.1.4's 30-day description are
+  materially inconsistent and both are surfaced;
 - for a change occurring on or after 1 March 2026, amendment ¶¶2.1 and 2.2 align
   both provisions to 14 days, using the change-occurrence date; and
 - §4.1.1 versus §10.5.2 on exclusion from eligibility versus an award reduction
@@ -374,12 +378,19 @@ retrieval, and citations.
 - The parser, index manifest, citations, and source lookups now retain both
   manual-clause and amendment-paragraph provenance.
 - `data/policy_timeline.json` records source-verified amendment operations and
-  `src/temporal.py` resolves them before ordinary retrieval when a question is
-  amendment-sensitive.
+  `src/temporal.py` resolves them after query/date extraction and hybrid
+  retrieval when a question is amendment-sensitive.
 - Paragraphs 1, 3, and 4 use the determination date under amendment ¶5.1;
   paragraph 2 uses the date the change of circumstances occurred under ¶5.2.
   A period spanning 1 March uses figures in force on each day and is apportioned
   under ¶5.3 and §7.4.3.
+- The pipeline and both user interfaces accept a structured change or
+  determination date. A structured date is checked against any same-role date
+  written in the question and disagreement fails safely.
+- Direct reporting-duty questions use the specific obligation in §4.3.2: 10
+  days for a pre-1-March change and 14 days from that date onward. The old
+  §9.1.4 wording remains a conflict only when overpayment protection or the
+  inconsistency itself is in scope.
 - A missing legally controlling date is a refusal/clarification condition, not
   permission to use today's value. Date-sensitive cases must be added to the
   evaluation set and rerun with every timeline update.
@@ -388,9 +399,9 @@ retrieval, and citations.
 
 The three-state `ANSWER` / `CONFLICT` / `REFUSE` contract, source-first answer
 construction, citation validation, policy-gap handling, and prohibition on
-inventing facts or escalation contacts remain unchanged. The amendment is not
-treated as a reason to silently repair base-manual ambiguity: where its transition
-does not settle a historical conflict, the result remains `CONFLICT`.
+inventing facts or escalation contacts remain unchanged. A base-manual
+inconsistency is surfaced when it is material to the question; it is not allowed
+to override a more specific clause governing a narrower, directly asked duty.
 
 ### Hindsight
 

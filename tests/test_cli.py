@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -61,6 +62,17 @@ def test_cli_parser_exposes_required_commands() -> None:
 
     reranked_evaluation = parser.parse_args(["evaluate", "--respect-reranking"])
     assert reranked_evaluation.respect_reranking is True
+
+    dated_question = parser.parse_args(
+        [
+            "ask",
+            "How many days do I have to report an income change?",
+            "--change-date",
+            "2026-02-15",
+        ]
+    )
+    assert dated_question.change_date == date(2026, 2, 15)
+    assert dated_question.determination_date is None
 
 
 def test_cli_corpus_report_is_valid_json(corpus_path: Path, capsys) -> None:

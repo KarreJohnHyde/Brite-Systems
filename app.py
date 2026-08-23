@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import time
+from datetime import date
 from typing import Any
 
 import streamlit as st
@@ -167,6 +168,24 @@ with st.sidebar:
         st.session_state.messages = []
         st.rerun()
 
+    st.divider()
+    st.header("Case context")
+    use_case_date = st.toggle("Use a case date", value=False)
+    date_basis = "Change occurred"
+    case_date: date | None = None
+    if use_case_date:
+        date_basis = st.selectbox(
+            "Date applies to",
+            ("Change occurred", "Determination made"),
+        )
+        case_date = st.date_input(
+            "Date",
+            value=date.today(),
+            min_value=date(2000, 1, 1),
+            max_value=date(2100, 12, 31),
+            format="DD/MM/YYYY",
+        )
+
 try:
     runtime_settings = Settings.from_env(
         embedding_backend=embedding_backend,
@@ -231,15 +250,32 @@ if prompt := st.chat_input(
     key="policy_question",
     submit_mode="disable",
 ):
-    st.session_state.messages.append({"role": "user", "content": prompt})
+    display_prompt = prompt
+    change_date = None
+    determination_date = None
+    if use_case_date and case_date is not None:
+        context_label = date_basis
+        display_prompt += (
+            f"\n\n**{context_label}:** {case_date.day} {case_date.strftime('%B %Y')}"
+        )
+        if date_basis == "Change occurred":
+            change_date = case_date
+        else:
+            determination_date = case_date
+
+    st.session_state.messages.append({"role": "user", "content": display_prompt})
     with st.chat_message("user"):
-        st.markdown(prompt)
+        st.markdown(display_prompt)
 
     with st.chat_message("assistant"):
         try:
             started = time.perf_counter()
             with st.spinner("Retrieving and checking policy evidence…"):
-                answer = pipeline.ask(prompt)
+                answer = pipeline.ask(
+                    prompt,
+                    change_date=change_date,
+                    determination_date=determination_date,
+                )
             if pipeline.retriever.reranker_error:
                 reranking_slot.caption(
                     "Reranking encountered a runtime error; hybrid vector/BM25 retrieval remains active. "
