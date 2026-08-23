@@ -9,8 +9,11 @@ from typing import Any, Literal
 from pydantic import ValidationError
 
 from src.llm.base import LLMProvider, LLMProviderError
-from src.llm.prompts import build_coverage_gate_prompt, build_generation_prompt
-from src.models import CoverageGateResult, PolicyChunk
+from src.llm.prompts import (
+    build_coverage_gate_prompt,
+    build_generation_selection_prompt,
+)
+from src.models import CoverageGateResult, GenerationSelection, PolicyChunk
 
 DEFAULT_GEMINI_MODEL = "gemini-3.6-flash"
 
@@ -98,17 +101,16 @@ class GeminiProvider(LLMProvider):
         self,
         question: str,
         contexts: Sequence[PolicyChunk],
-        routing_table: dict,
-        reference_date: str,
-    ) -> str:
-        """Generate the final structured text answer based on the Master Prompt."""
-        prompt = build_generation_prompt(question, contexts, routing_table, reference_date)
+    ) -> GenerationSelection:
+        """Generate structured phrasing whose opaque source IDs can be validated."""
+        prompt = build_generation_selection_prompt(question, contexts)
         
         try:
             generation_config = {
                 "temperature": 0.0,
                 "max_output_tokens": 2048,
-                "response_mime_type": "text/plain",
+                "response_mime_type": "application/json",
+                "response_schema": GenerationSelection,
             }
             if self.model.startswith("gemini-3"):
                 generation_config["thinking_config"] = {
@@ -119,10 +121,32 @@ class GeminiProvider(LLMProvider):
                 contents=prompt,
                 config=generation_config,
             )
-            return getattr(response, "text", "")
+            return self._parse_generation_response(response)
         except Exception as exc:
             raise LLMProviderError(
                 f"Gemini generation request failed ({type(exc).__name__})"
+            ) from exc
+
+    @staticmethod
+    def _parse_generation_response(response: Any) -> GenerationSelection:
+        try:
+            parsed = getattr(response, "parsed", None)
+            if isinstance(parsed, GenerationSelection):
+                return parsed
+            if parsed is not None:
+                return GenerationSelection.model_validate(parsed)
+
+            response_text = getattr(response, "text", None)
+            if not isinstance(response_text, str) or not response_text.strip():
+                raise LLMProviderError("Gemini returned no structured answer")
+            return GenerationSelection.model_validate_json(response_text)
+        except LLMProviderError:
+            raise
+        except (ValidationError, TypeError, ValueError) as exc:
+            raise LLMProviderError("Gemini returned invalid answer JSON") from exc
+        except Exception as exc:
+            raise LLMProviderError(
+                f"Gemini answer parsing failed ({type(exc).__name__})"
             ) from exc
 
     @staticmethod

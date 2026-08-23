@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 
-from src.models import CoverageGateResult, PolicyChunk
+from src.models import CoverageGateResult, GenerationSelection, PolicyChunk
 
 
 class LLMProviderError(RuntimeError):
@@ -29,8 +29,6 @@ class LLMProvider(ABC):
         self,
         question: str,
         contexts: Sequence[PolicyChunk],
-        routing_table: dict,
-        reference_date: str,
-    ) -> str:
-        """Generate the final structured text answer based on the Master Prompt."""
+    ) -> GenerationSelection:
+        """Return citation-selectable phrasing without changing the decision."""
         raise LLMProviderError("An abstract LLM provider cannot generate a response")

@@ -170,6 +170,7 @@ class PolicyAnswer(BaseModel):
     reason: str
     next_step: str | None = None
     trace: DecisionTrace | None = None
+    phrasing_mode: Literal["deterministic", "model"] = "deterministic"
 
     @model_validator(mode="after")
     def enforce_state_contract(self) -> PolicyAnswer:

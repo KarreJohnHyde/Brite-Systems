@@ -118,6 +118,21 @@ class UnexpectedClauseLookupProvider:
         raise AssertionError("pure clause lookup should use trusted verbatim text")
 
 
+class ValidPhrasingProvider:
+    def evaluate_coverage(self, question, contexts):
+        from src.models import CoverageGateResult
+
+        return CoverageGateResult(covered=True, uncovered_aspect=None, confidence=1.0)
+
+    def generate_answer(self, question, contexts):
+        return GenerationSelection(
+            decision=Decision.ANSWER,
+            answer="A household may have up to $4,000 in countable resources.",
+            supporting_source_ids=[contexts[0].chunk_id],
+            reason="The selected policy source states the resource limit.",
+        )
+
+
 @pytest.mark.parametrize(
     "provider",
     [InventedClaimProvider(), ForgedSourceProvider(), DecisionOverrideProvider()],
@@ -142,8 +157,29 @@ def test_provider_or_citation_failure_falls_back_to_trusted_source_text(
     assert "$4,000" in answer.answer
     assert "$99,999" not in answer.answer
     assert "chunk_not_retrieved" not in answer.answer
+    assert answer.phrasing_mode == "deterministic"
     assert answer.trace is not None
     assert answer.trace.decision == Decision.ANSWER
+
+
+def test_valid_model_phrasing_is_recorded_for_answer_review(
+    pipeline_settings,
+    hashing_engine,
+    vector_store,
+) -> None:
+    pipeline = GroundedAnswerPipeline(
+        pipeline_settings,
+        hashing_engine,
+        vector_store,
+        llm_provider=ValidPhrasingProvider(),
+    )
+
+    answer = pipeline.ask("What is the household resource limit?")
+
+    assert answer.decision == Decision.ANSWER
+    assert answer.phrasing_mode == "model"
+    assert "$4,000" in answer.answer
+    assert [citation.clause_id for citation in answer.citations] == ["2.4.1"]
 
 
 def test_exact_clause_lookup_bypasses_optional_phrasing_provider(
@@ -163,6 +199,7 @@ def test_exact_clause_lookup_bypasses_optional_phrasing_provider(
 
     assert answer.decision == Decision.ANSWER
     assert [citation.clause_id for citation in answer.citations] == ["2.4.1"]
+    assert answer.phrasing_mode == "deterministic"
 
 
 def test_absence_extension_is_answered_not_falsely_conflicted(pipeline) -> None:

@@ -60,10 +60,11 @@ class AnswerBuilder:
         # intentionally receives opaque IDs, so asking it to infer the official
         # clause label would either force a guess or cause a needless refusal.
         if self.llm_provider is not None and not requested_clause_lookup_ids(trace.question):
+            phrasing_mode = "deterministic"
             try:
                 generated = self.llm_provider.generate_answer(
                     trace.question,
-                    [item.chunk for item in trace.retrieved],
+                    [item.chunk for item in selected],
                 )
                 if generated.decision != Decision.ANSWER:
                     raise CitationIntegrityError(
@@ -74,6 +75,7 @@ class AnswerBuilder:
                     validator.validate_claims(generated.answer, generated.supporting_source_ids)
                 citations = validator.build(generated.supporting_source_ids)
                 answer_text = generated.answer.strip()
+                phrasing_mode = "model"
             except Exception as exc:
                 # The decision and sources were already validated before the
                 # optional phrasing call. Never show rejected model text; retain
@@ -85,6 +87,7 @@ class AnswerBuilder:
                 answer_text = self._verbatim_answer(selected)
         else:
             answer_text = self._verbatim_answer(selected)
+            phrasing_mode = "deterministic"
 
         level = self._evidence_level(trace, source_ids)
         return PolicyAnswer(
@@ -93,6 +96,7 @@ class AnswerBuilder:
             citations=citations,
             evidence_level=level,
             reason=trace.decision_reason,
+            phrasing_mode=phrasing_mode,
         )
 
     def _build_refusal(self, trace: DecisionTrace) -> PolicyAnswer:

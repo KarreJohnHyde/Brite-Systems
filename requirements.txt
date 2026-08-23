@@ -10,5 +10,10 @@ faiss-cpu==1.15.0
 # Web application (required by Streamlit Community Cloud)
 streamlit==1.62.0
 
+# Optional runtimes exposed by the web interface when configured
+sentence-transformers==6.0.0
+torch==2.13.0
+google-genai==2.19.0
+
 # Tests
 pytest==9.1.1
