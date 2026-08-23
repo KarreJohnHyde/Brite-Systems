@@ -1,5 +1,5 @@
 # Optional structured answer phrasing providers.
--r requirements.txt
+-r requirements-core.txt
 google-genai==2.19.0
 openai==3.3.1
 anthropic==1.0.0

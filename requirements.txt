@@ -1,25 +1,8 @@
-# Pinned core dependency set for CPython 3.11+.
+# Full pinned Streamlit deployment for CPython 3.11+.
 # Install with: python -m pip install -r requirements.txt
 
---extra-index-url https://download.pytorch.org/whl/cpu
-
-# Core deterministic pipeline and validated configuration
-numpy==2.4.6
-pydantic==2.13.4
-python-dotenv==1.2.3
-faiss-cpu==1.15.0
-
-# Web application (required by Streamlit Community Cloud)
-streamlit==1.62.0
-
-# Optional runtimes exposed by the web interface when configured
-sentence-transformers==6.0.0
-torch==2.13.0+cpu
-google-genai==2.19.0
-openai==3.3.1
-anthropic==1.0.0
-groq==1.6.0
-langsmith==0.11.1
-
-# Tests
-pytest==9.1.1
+# Community Cloud installs this aggregate so every sidebar runtime is present.
+-r requirements-ui.txt
+-r requirements-ml.txt
+-r requirements-llm.txt
+-r requirements-tracing.txt

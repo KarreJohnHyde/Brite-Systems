@@ -1,0 +1,3 @@
+# Full application plus the automated regression suite.
+-r requirements.txt
+pytest==9.1.1

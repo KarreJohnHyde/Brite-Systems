@@ -1,0 +1,7 @@
+# Credential-free deterministic policy pipeline.
+# Install this file for CLI-only hashing retrieval without Streamlit or models.
+
+numpy==2.4.6
+pydantic==2.13.4
+python-dotenv==1.2.3
+faiss-cpu==1.15.0

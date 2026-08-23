@@ -445,7 +445,7 @@ with st.sidebar:
         st.button(
             "Clear session API keys",
             icon=":material/key_off:",
-            use_container_width=True,
+            width="stretch",
             on_click=_clear_session_credentials,
         )
 
