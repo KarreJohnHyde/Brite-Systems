@@ -30,12 +30,14 @@ presentation. It also suggested the three-state `ANSWER` / `CONFLICT` /
 
 AI drafted and revised Python modules, Pydantic schemas, configuration loading,
 the CLI, the optional Streamlit interface, deterministic retrieval/generation,
-the optional Gemini provider, and citation safeguards. It also assisted with the
-amendment parser, source-bundle integrity checks, a source-verified policy
-timeline, and date-sensitive resolution after hybrid retrieval. Generated code was
-inspected in the repository rather than accepted solely from prose output. Codex
-also added direct LangSmith instrumentation with a strict diagnostic allowlist;
-raw questions, answers, policy text, reasons, and next steps are not included in
+the Gemini, OpenAI, Anthropic/Claude, and Groq-hosted Llama phrasing adapters,
+OpenAI and Gemini embedding adapters, session-only credential controls, and
+citation safeguards. It also assisted with the amendment parser, source-bundle
+integrity checks, a source-verified policy timeline, and date-sensitive
+resolution after hybrid retrieval. Generated code was inspected in the
+repository rather than accepted solely from prose output. Codex also added
+direct LangSmith instrumentation with a strict diagnostic allowlist; raw
+questions, answers, policy text, reasons, and next steps are not included in
 remote trace payloads.
 
 ### Corpus analysis and test suggestions
@@ -53,7 +55,8 @@ AI ran local commands, read tracebacks and evaluation output, identified failure
 categories, and proposed repairs in the responsible pipeline stages. Examples
 include clean-clone checks, dependency/runtime checks, retrieval misses, refusal
 boundary errors, missed conflicts, citation-contract failures, stale UI or
-provider integrations, and historical/effective-date regression cases.
+provider integrations, session-key fallback behavior, public Streamlit protocol
+checks, and historical/effective-date regression cases.
 
 AI also implemented and executed the local retrieval-model training harness. It
 helped design the clause-disjoint folds, guarded hard-negative rules, CPU
@@ -66,14 +69,16 @@ the model-training report for human release review.
 
 AI drafted the clean-clone instructions, architecture explanation, ADRs,
 privacy/security notes, known limitations, command examples, the Day-2 amendment
-record, and this disclosure. Documentation claims still need to agree with
-executed commands and recorded evaluation artifacts before release.
+record, dependency profiles, the complete evaluation-question catalog, and this
+disclosure. Documentation claims still need to agree with executed commands and
+recorded evaluation artifacts before release.
 
 ### Prompt development
 
-AI helped draft the optional provider prompt that limits the model to supplied
-policy excerpts, treats source text as untrusted data, requires structured
-output, and restricts source selection to opaque IDs supplied by the program.
+AI helped draft the shared optional-provider prompt that limits each model to
+supplied policy excerpts, treats source text as untrusted data, requires
+structured output, and restricts source selection to opaque IDs supplied by the
+program.
 
 ## Human judgment and responsibility
 

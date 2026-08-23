@@ -89,9 +89,9 @@ passes independent support assessment.
 **Decision:** Training is limited to the Sentence Transformer bi-encoder and
 CrossEncoder reranker. Do not fine-tune the answer generator from the
 source-derived labels: they contain decisions, evidence IDs, facts, and forbidden
-claims, but no human-authored target answers. Gemini is hosted and outside this
-local training boundary. Hashing, BM25, FAISS `IndexFlatIP`, and deterministic
-safety logic have no learned parameters.
+claims, but no human-authored target answers. Gemini, OpenAI, Anthropic/Claude,
+and Groq-hosted Llama are outside this local training boundary. Hashing, BM25,
+FAISS `IndexFlatIP`, and deterministic safety logic have no learned parameters.
 
 Training uses two rotating, clause-disjoint folds so every query is held out
 once. Hard negatives exclude gold clauses, their section, adjacent clauses,
@@ -253,14 +253,21 @@ proof of citation truth.
 **Decision:** Deterministic, source-forward answer construction is the default.
 It uses selected source text and requires no API key.
 
-Gemini is an optional implementation of the `LLMProvider` interface. It can
-rephrase only an already-authorized `ANSWER`; it cannot override the decision
-engine. Structured provider output is validated with Pydantic and source-ID
+Gemini, OpenAI, Anthropic/Claude, and Groq-hosted Llama are optional
+implementations of one `LLMProvider` interface. A selected provider can rephrase
+only an already-authorized `ANSWER`; it cannot override the decision engine.
+Structured provider output is validated with Pydantic and source-ID
 allowlisting. Pure official-clause lookups are rendered verbatim because the
 provider intentionally receives only opaque IDs. Any malformed, unsupported,
 or invalid provider output is discarded and replaced with the already validated
-exact source text. If that fallback cannot satisfy the answer contract, the
+deterministic wording. If that fallback cannot satisfy the answer contract, the
 pipeline refuses.
+
+OpenAI and Gemini embeddings are separate retrieval options. They create
+backend/model/dimension-specific indexes and never make their scores evidence
+of policy support. Hashing remains the credential-free baseline; local MiniLM
+remains an opt-in download. A LangSmith/LangChain credential enables tracing
+only and is deliberately not treated as an embedding or answer-provider key.
 
 **Trade-off:** Deterministic answers are less conversational, but they are stable,
 inspectable, private by default, and remain available when an external service is
@@ -272,11 +279,14 @@ unavailable.
 text as untrusted data.
 
 - Deterministic mode does not send questions or excerpts to an external model.
-- Gemini mode sends only the question and selected policy excerpts with opaque
-  IDs. Unrelated local files are never included.
+- Hosted phrasing sends only the question and selected policy excerpts with
+  opaque IDs. Hosted embeddings send policy text while building their index and
+  the question while embedding a query. Unrelated local files are never included.
 - The provider system prompt explicitly treats policy excerpts as data whose
   embedded instructions must not be followed.
 - `.env` and Streamlit secrets are ignored by Git.
+- Credentials pasted into Streamlit password fields remain in session state and
+  are neither written to disk nor included in answers, chat history, or traces.
 - Logs and debug traces can contain questions and source excerpts, so they must
   be handled as potentially sensitive artifacts.
 
@@ -347,8 +357,10 @@ case questions or policy text to another service.
    digest forces re-ingestion but cannot preserve old line numbers.
 6. Sentence Transformer and reranker behavior depends on downloaded model files,
    hardware, and library versions; it must be evaluated separately from hashing.
-7. Gemini behavior and service availability are external variables. Provider
-   failure safely reduces coverage to refusal.
+7. Hosted-provider behavior, model names, quotas, and service availability are
+   external variables. Phrasing failure falls back to validated deterministic
+   wording. In the Streamlit interface, hosted-embedding setup failure falls
+   back to hashing and visibly reports the backend actually used.
 8. The parser is tailored to the supplied numbered Markdown structure and does
    not handle scanned PDFs or arbitrary manual layouts.
 9. The system has no case record, external statute, or regulatory database. It
@@ -411,3 +423,48 @@ first-class ingestion data from the start. The original component boundaries mad
 the correction localized, but baseline evaluation claims and demos still needed
 to be revisited; future policy work should establish a timeline test matrix before
 publishing aggregate results.
+
+## 17. Rejected scope, delivery cuts, and next improvements
+
+### Deliberately rejected
+
+- Autonomous eligibility decisions, award calculations from incomplete facts,
+  and use of general model knowledge as policy authority.
+- Answer-first RAG, silent conflict resolution, guessed effective dates, and
+  invented escalation contacts.
+- Persistent storage of credentials pasted into the browser. Deployment secrets
+  belong in the hosting platform; session credentials disappear with the session.
+- LangChain as a core orchestration dependency. The policy state machine remains
+  explicit, and the standalone LangSmith SDK is sufficient for optional tracing.
+- Treating retrieval rank, model confidence, or provider fluency as proof that a
+  clause completely supports an answer.
+
+### Cut or deferred for this delivery
+
+- Direct PDF/DOCX/OCR ingestion. The runtime consumes the reviewed Markdown
+  source bundle so clause boundaries and citations remain inspectable.
+- Authentication, a case database, staff roles, durable chat history, and a
+  production audit-log service.
+- An administrator workflow for uploading, approving, signing, and scheduling
+  quarterly amendments. Each amendment currently requires a reviewed timeline
+  change and re-ingestion through Git.
+- Contextual resolution of deictic follow-ups such as "What about the
+  exceptions?" The safe behavior is to request a standalone question.
+- Live CI calls to every paid hosted provider and embedding service. Provider
+  contracts are tested with fakes; live credentials remain an explicit release
+  check outside the public test suite.
+- A blind staff-query benchmark, multilingual evaluation, and a formal legal or
+  accessibility review.
+
+### Highest-value improvements
+
+1. Add an authenticated amendment-review workflow with source signatures,
+   previewed timeline effects, approval gates, and automatic regression runs.
+2. Build a blind, human-labeled caseworker benchmark and calibrate thresholds on
+   data that was not used to tune retrieval rules.
+3. Add protected provider smoke tests, browser-level accessibility checks, and
+   desktop/mobile end-to-end tests to CI.
+4. Add constrained query decomposition for compound questions while preserving
+   per-claim evidence and all-or-refuse material coverage.
+5. Expand typo, language, date-format, and policy-conflict coverage without
+   weakening the explicit unknown and escalation boundary.
